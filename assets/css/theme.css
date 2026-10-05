@@ -1,0 +1,137 @@
+/* =============================================================================
+ * مصروفي — theme.css
+ * كل الألوان والرموز هنا فقط. الوضعان: نهاري (light) وليلي (dark).
+ * ========================================================================== */
+
+:root {
+  /* دلالات ثابتة (نفسها في الوضعين) */
+  --c-income: #22c55e;
+  --c-income-soft: rgba(34, 197, 94, 0.14);
+  --c-expense: #f43f5e;
+  --c-expense-soft: rgba(244, 63, 94, 0.14);
+  --c-warn: #f59e0b;
+  --c-warn-soft: rgba(245, 158, 11, 0.14);
+  --c-danger: #ef4444;
+  --c-info: #38bdf8;
+  --c-saving: #f59e0b;
+
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-full: 999px;
+
+  --tap: 44px;
+  --gap: 12px;
+  --gap-sm: 8px;
+  --gap-lg: 18px;
+
+  --font: "Segoe UI", "Noto Naskh Arabic", "Tahoma", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.16);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.22);
+
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+
+/* ------------------------------------------------------------------ ليلي */
+:root,
+[data-theme="dark"] {
+  --c-bg: #0b1020;
+  --c-bg-2: #10162a;
+  --c-surface: #141a2e;
+  --c-surface-2: #1b2338;
+  --c-surface-3: #232c45;
+  --c-text: #e8ecf6;
+  --c-text-2: #c3cbe0;
+  --c-muted: #8b95ad;
+  --c-border: #26304a;
+  --c-border-soft: rgba(255, 255, 255, 0.06);
+  --c-primary: #2f6df6;
+  --c-primary-2: #5b8cff;
+  --c-primary-soft: rgba(47, 109, 246, 0.16);
+  --c-on-primary: #ffffff;
+  --c-overlay: rgba(4, 7, 16, 0.72);
+  color-scheme: dark;
+}
+
+/* ----------------------------------------------------------------- نهاري */
+[data-theme="light"] {
+  --c-bg: #f4f6fb;
+  --c-bg-2: #eaeef8;
+  --c-surface: #ffffff;
+  --c-surface-2: #f7f9fd;
+  --c-surface-3: #eef2fa;
+  --c-text: #101527;
+  --c-text-2: #2c3550;
+  --c-muted: #6b7488;
+  --c-border: #dde3f0;
+  --c-border-soft: rgba(16, 21, 39, 0.06);
+  --c-primary: #1d4ed8;
+  --c-primary-2: #3b6ef0;
+  --c-primary-soft: rgba(29, 78, 216, 0.1);
+  --c-on-primary: #ffffff;
+  --c-overlay: rgba(20, 26, 46, 0.42);
+  --c-income: #16a34a;
+  --c-expense: #e11d48;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+::selection { background: var(--c-primary-soft); }
+
+/* شرائط التمرير */
+* { scrollbar-width: thin; scrollbar-color: var(--c-surface-3) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--c-surface-3); border-radius: var(--radius-full); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+h1, h2, h3, h4 { margin: 0; font-weight: 700; line-height: 1.35; }
+h1 { font-size: 20px; }
+h2 { font-size: 17px; }
+h3 { font-size: 16px; }
+p { margin: 0 0 8px; }
+a { color: var(--c-primary-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+input[type="date"] { direction: ltr; text-align: right; }
+
+.money { font-variant-numeric: tabular-nums; font-weight: 600; unicode-bidi: plaintext; }
+.tx-income { color: var(--c-income); }
+.tx-expense { color: var(--c-expense); }
+.muted { color: var(--c-muted); }
+.text-2 { color: var(--c-text-2); }
+.nowrap { white-space: nowrap; }
+.center { text-align: center; }
+.hidden { display: none !important; }
+.mono { font-family: var(--font-mono); direction: ltr; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

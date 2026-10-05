@@ -1,0 +1,82 @@
+/* =============================================================================
+ * مصروفي — domains.css
+ * تنسيقات خاصة بشاشة النطاقات فقط (بقية التنسيقات في app.css).
+ * تعتمد على متغيرات theme.css حصراً.
+ * ========================================================================== */
+
+/* ------------------------------------------------------------- رؤوس الأزرار */
+.header-links { display: inline-flex; align-items: center; gap: 6px; }
+.header-links:empty { display: none; }
+
+/* ------------------------------------------------------------- صف النطاق */
+.domain-row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 10px 12px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-inline-start: 4px solid var(--c-border);
+  border-radius: var(--radius);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.domain-row + .domain-row { margin-block-start: var(--gap-sm); }
+.domain-row:hover { background: var(--c-surface-2); }
+
+.domain-row.domain-expired { border-inline-start-color: var(--c-danger); background: var(--c-expense-soft); }
+.domain-row.domain-critical { border-inline-start-color: var(--c-expense); }
+.domain-row.domain-soon { border-inline-start-color: var(--c-warn); }
+.domain-row.domain-watch { border-inline-start-color: var(--c-info); }
+.domain-row.domain-ok { border-inline-start-color: var(--c-income); }
+
+.domain-ico { font-size: 20px; line-height: 1; flex: 0 0 auto; }
+
+.domain-main { flex: 1 1 auto; min-width: 0; }
+.domain-name {
+  font-weight: 700;
+  font-size: 15px;
+  direction: ltr;
+  text-align: start;
+  unicode-bidi: plaintext;
+  overflow-wrap: anywhere;
+}
+.domain-meta {
+  font-size: 12.5px;
+  color: var(--c-muted);
+  margin-block-start: 2px;
+  overflow-wrap: anywhere;
+}
+.domain-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+/* ------------------------------------------------------- صفوف مساعدة */
+.form-inline {
+  display: flex;
+  gap: var(--gap-sm);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.form-inline .input { flex: 1 1 160px; min-width: 0; }
+
+.tld-row { margin-block-end: 10px; }
+.tld-row:last-child { margin-block-end: 0; }
+.tld-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-sm);
+  font-size: 13px;
+  margin-block-end: 4px;
+}
+.tld-head .mono { font-weight: 700; direction: ltr; }
+
+@media (max-width: 420px) {
+  .domain-row { padding: 9px 10px; gap: 8px; }
+  .domain-actions { flex-direction: column; gap: 4px; }
+  .domain-actions .btn { width: 100%; }
+  .domain-actions .icon-btn { width: 100%; }
+}

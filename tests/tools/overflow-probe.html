@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>مسبار تجاوز العرض</title>
+  <link rel="stylesheet" href="../../assets/css/theme.css">
+  <link rel="stylesheet" href="../../assets/css/app.css">
+  <style>
+    /* نُظهر النتائج على الصورة نفسها لأن --dump-dom لا يلتقط stdout هنا */
+    #report {
+      position: fixed; inset: 0; z-index: 99999;
+      background: #000; color: #0f0;
+      font: 11px/1.45 monospace; direction: ltr; text-align: left;
+      padding: 6px; margin: 0; overflow: auto; white-space: pre-wrap;
+    }
+    #app { position: absolute; inset-inline-start: 0; top: 0; width: 390px; }
+  </style>
+</head>
+<body>
+  <pre id="report">…</pre>
+
+  <div class="app-shell" id="app" style="width:390px;">
+    <header class="app-header">
+      <div class="app-header-main">
+        <div class="app-brand">
+          <span class="app-logo">💼</span>
+          <div class="app-brand-text"><h1 class="app-title">مصروفي</h1><div class="app-date">الإثنين 5 أكتوبر 2026</div></div>
+        </div>
+        <div class="app-actions">
+          <button class="header-btn" id="nav-badge-btn">⏳<span class="nav-badge" id="nav-badge">5,500</span></button>
+          <button class="header-btn" id="quick-add-btn">＋</button>
+          <button class="header-btn" id="theme-toggle">☀️</button>
+          <a class="header-btn" href="#/settings">⚙️</a>
+        </div>
+      </div>
+    </header>
+    <main class="view" id="view"></main>
+    <nav class="nav" id="nav"></nav>
+  </div>
+  <div id="toasts" class="toasts"></div>
+
+  <script src="../../assets/js/constants.js"></script>
+  <script src="../../assets/js/util.js"></script>
+  <script src="../../assets/js/finance.js"></script>
+  <script src="../../assets/js/store.js"></script>
+  <script src="../../assets/js/ui.js"></script>
+  <script src="../../assets/js/views/dashboard.js"></script>
+  <script src="../../assets/js/views/expenses.js"></script>
+  <script src="../../assets/js/views/income.js"></script>
+  <script src="../../assets/js/views/accounts.js"></script>
+  <script src="../../assets/js/views/reports.js"></script>
+  <script src="../../assets/js/views/settings.js"></script>
+  <script src="../../assets/js/views/agent.js"></script>
+  <script src="../../assets/js/agent.js"></script>
+  <script src="../../assets/js/app.js"></script>
+  <script>
+    // app.js يُحمَّل بـ defer، لذا ننتظر اكتمال تحميل الصفحة قبل الفحص
+    window.addEventListener('load', function () {
+      var lines = [];
+      function log(s) { lines.push(s); }
+
+      try {
+        var app = document.getElementById('app');
+        var App = window.Fin && window.Fin.App;
+        if (!App) {
+          document.getElementById('report').textContent =
+            'DEBUG: window.Fin=' + (typeof window.Fin) +
+            ' keys=' + (window.Fin ? Object.keys(window.Fin).join(',') : '-') +
+            ' | document.readyState=' + document.readyState;
+          return;
+        }
+        App.adoptViews();
+
+        var W = 390;
+        var ctx = { state: Fin.Store.state, asOf: '2026-10-05', refresh: function () {}, go: function () {} };
+
+        ['dashboard', 'expenses', 'income', 'accounts', 'reports', 'settings'].forEach(function (id) {
+          var view = App.getView(id);
+          if (!view) { log(id + ': MISSING'); return; }
+          App.container.innerHTML = '';
+          try { view.render(App.container, ctx); } catch (e) { log(id + ': RENDER ERROR ' + e.message); return; }
+          App.renderNav();
+          App.renderHeader();
+
+          var offenders = [];
+          var all = app.querySelectorAll('*');
+          for (var i = 0; i < all.length; i++) {
+            var n = all[i];
+            var r = n.getBoundingClientRect();
+            if (r.width < 1 && r.height < 1) continue;
+            if (r.right > W + 1 || r.left < -1 || r.width > W + 1) {
+              offenders.push({
+                sel: n.tagName.toLowerCase() + '.' + String(n.className || '').split(' ').filter(Boolean).slice(0, 2).join('.'),
+                w: Math.round(r.width), l: Math.round(r.left), r: Math.round(r.right),
+                sw: n.scrollWidth, cw: n.clientWidth,
+                t: (n.textContent || '').trim().slice(0, 30)
+              });
+            }
+          }
+          offenders.sort(function (a, b) { return b.w - a.w; });
+          log('=== ' + id + ' === appScrollW=' + app.scrollWidth + ' docScrollW=' + document.documentElement.scrollWidth + ' offenders=' + offenders.length);
+          offenders.slice(0, 10).forEach(function (o) {
+            log('  <' + o.sel + '> w=' + o.w + ' L=' + o.l + ' R=' + o.r + ' sw=' + o.sw + ' cw=' + o.cw + ' | ' + o.t);
+          });
+        });
+        log('DONE');
+      } catch (e) {
+        log('FATAL ' + e.message);
+      }
+      document.getElementById('report').textContent = lines.join('\n');
+    });
+  </script>
+</body>
+</html>

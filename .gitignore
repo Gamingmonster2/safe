@@ -1,0 +1,23 @@
+# نظام
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# محرّرات
+.vscode/
+.idea/
+
+# node (المشروع بلا تبعيات، لكن نحمي من الإضافات العارضة)
+node_modules/
+package-lock.json
+
+# مخرجات مؤقتة
+*.log
+*.tmp
+
+# ⚠️ أمان: لا تُضِف أي ملف يحتوي مفتاح DeepSeek.
+# المفتاح يُحفظ في localStorage داخل المتصفح فقط، ولا يوجد في أي ملف بالمستودع.
+*.key
+secrets*
+.env
+.env.*

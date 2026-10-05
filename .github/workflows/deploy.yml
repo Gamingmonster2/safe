@@ -1,0 +1,123 @@
+# =============================================================================
+# مصروفي — نشر الموقع الثابت على GitHub Pages (بلا أي خطوة بناء)
+# الطريقة: Settings ← Pages ← Source = GitHub Actions، ثم ادفع إلى main.
+# =============================================================================
+name: نشر مصروفي
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: فحص الملفات ثم تجهيز الحزمة
+    runs-on: ubuntu-latest
+    steps:
+      - name: جلب المستودع
+        uses: actions/checkout@v4
+
+      - name: نسخة node
+        run: node -v
+
+      # خطوة تحقق صريحة قبل النشر: node --check لكل ملفات assets/js/**/*.js
+      # + وجود الملفات الأساسية + صلاحية manifest + أن كل ملف في قائمة precache موجود فعلاً.
+      - name: التحقق من صحة ملفات JS والحزمة
+        shell: bash
+        run: |
+          node -e '
+          const fs = require("fs"), path = require("path"), cp = require("child_process");
+          let bad = 0;
+          const jsFiles = [];
+          (function walk(dir) {
+            for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+              const p = path.join(dir, e.name);
+              if (e.isDirectory()) walk(p);
+              else if (e.name.endsWith(".js")) jsFiles.push(p);
+            }
+          })("assets/js");
+          if (!jsFiles.length) { console.error("FAIL: لا توجد ملفات JS تحت assets/js"); process.exit(1); }
+          for (const f of jsFiles.sort()) {
+            const r = cp.spawnSync(process.execPath, ["--check", f], { stdio: "inherit" });
+            if (r.status !== 0) { console.error("FAIL node --check: " + f); bad++; }
+          }
+          console.log("node --check: فُحص " + jsFiles.length + " ملف JS");
+          const required = [
+            "index.html", "manifest.webmanifest", "sw.js", ".nojekyll",
+            "assets/css/theme.css", "assets/css/app.css",
+            "assets/img/icon-192.png", "assets/img/icon-512.png",
+            "assets/img/icon-maskable-192.png", "assets/img/icon-maskable-512.png",
+            "assets/img/apple-touch-icon.png", "assets/img/favicon.ico",
+            "assets/img/favicon-32.png"
+          ];
+          for (const f of required) if (!fs.existsSync(f)) { console.error("FAIL: ملف مفقود " + f); bad++; }
+          try {
+            const m = JSON.parse(fs.readFileSync("manifest.webmanifest", "utf8"));
+            for (const k of ["name", "short_name", "description", "lang", "dir", "start_url", "scope", "display", "orientation", "background_color", "theme_color", "categories", "icons", "shortcuts"]) {
+              if (!(k in m)) { console.error("FAIL manifest: الحقل مفقود " + k); bad++; }
+            }
+            if (!Array.isArray(m.icons) || !m.icons.some(function (i) { return i.purpose === "maskable"; })) {
+              console.error("FAIL manifest: لا توجد أيقونة maskable"); bad++;
+            }
+          } catch (e) { console.error("FAIL manifest JSON: " + e.message); bad++; }
+          const sw = fs.readFileSync("sw.js", "utf8");
+          const block = sw.match(/PRECACHE\s*=\s*\[([\s\S]*?)\]/);
+          if (!block) { console.error("FAIL: لا أجد قائمة PRECACHE في sw.js"); bad++; }
+          else {
+            const entries = (block[1].match(/[\"\x27](\.\/[^\"\x27]*)[\"\x27]/g) || []).map(function (s) { return s.slice(1, -1); });
+            for (const p of entries) {
+              const file = p === "./" ? "index.html" : p.replace(/^\.\//, "");
+              if (!fs.existsSync(file)) { console.error("FAIL precache: الملف غير موجود على القرص " + file); bad++; }
+            }
+            console.log("precache: " + entries.length + " مدخلاً — كلها موجودة على القرص");
+          }
+          if (bad) { console.error("التحقق فشل: " + bad + " خطأ"); process.exit(1); }
+          console.log("التحقق نجح ✓");
+          '
+
+      - name: اختبار PWA الذاتي (manifest + أيقونات + IHDR + ICO)
+        shell: bash
+        run: node tests/_pwa.check.mjs
+
+      # ملف CNAME فيه تعليق فقط = placeholder؛ نحذفه حتى لا يكسر النشر.
+      # ضع دومينك الحقيقي في CNAME (سطر واحد بلا #) ليُنشر الدومين المخصص.
+      - name: تجهيز CNAME
+        shell: bash
+        run: |
+          if [ -f CNAME ]; then
+            if head -c 1 CNAME | grep -q '#'; then
+              echo "::warning::CNAME ما زال placeholder — سيُحذف من الحزمة. اكتب دومينك الحقيقي في CNAME."
+              rm -f CNAME
+            else
+              echo "الدومين المخصص: $(cat CNAME)"
+            fi
+          fi
+
+      - name: تهيئة Pages
+        uses: actions/configure-pages@v5
+
+      - name: رفع الموقع الثابت (المجلد الجذر كما هو)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+  deploy:
+    name: النشر
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: النشر على GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

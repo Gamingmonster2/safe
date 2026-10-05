@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>قياس الصفحة الحقيقية — مصروفي</title>
+  <style>
+    body { margin: 0; }
+    /* نُحمّل الصفحة الحقيقية في إطار بعرض 390px تماماً كما على الجوال */
+    #frame { width: 390px; height: 1400px; border: 0; display: block; }
+  </style>
+</head>
+<body>
+  <iframe id="frame" src="../../index.html"></iframe>
+  <script>
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        var f = document.getElementById('frame');
+        var d = f.contentDocument, w = f.contentWindow;
+        var lines = [];
+        var app = d.querySelector('.app-shell');
+        var nav = d.getElementById('nav');
+        var view = d.getElementById('view');
+        lines.push('innerWidth=' + w.innerWidth + ' docScrollW=' + d.documentElement.scrollWidth +
+          ' bodyScrollW=' + d.body.scrollWidth);
+        lines.push('appShell=' + Math.round(app.getBoundingClientRect().width) + ' scrollW=' + app.scrollWidth);
+        lines.push('nav=' + Math.round(nav.getBoundingClientRect().width) + ' scrollW=' + nav.scrollWidth +
+          ' items=' + nav.children.length);
+        lines.push('view=' + Math.round(view.getBoundingClientRect().width) + ' scrollW=' + view.scrollWidth);
+        lines.push('OVERFLOW=' + (d.documentElement.scrollWidth > w.innerWidth + 1 ? 'YES ❌' : 'no ✅'));
+        // أوسع العناصر
+        var all = app.querySelectorAll('*'), arr = [];
+        for (var i = 0; i < all.length; i++) {
+          var r = all[i].getBoundingClientRect();
+          if (r.width > 391 || r.right > 392 || r.left < -2) {
+            arr.push({ s: all[i].tagName.toLowerCase() + '.' + String(all[i].className || '').split(' ').slice(0, 2).join('.'), w: Math.round(r.width), l: Math.round(r.left), r: Math.round(r.right) });
+          }
+        }
+        arr.sort(function (a, b) { return b.w - a.w; });
+        lines.push('offenders=' + arr.length);
+        arr.slice(0, 8).forEach(function (o) { lines.push('  <' + o.s + '> w=' + o.w + ' L=' + o.l + ' R=' + o.r); });
+        document.title = 'MEASURED';
+        var pre = d.createElement('div');
+        pre.setAttribute('style', 'position:fixed;inset:0;z-index:99999;background:#000;color:#0f0;font:12px monospace;direction:ltr;text-align:left;padding:8px;white-space:pre-wrap;');
+        pre.textContent = lines.join('\n');
+        document.body.appendChild(pre);
+      }, 1500);
+    });
+  </script>
+</body>
+</html>

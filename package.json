@@ -1,0 +1,25 @@
+{
+  "name": "masrofi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "مصروفي — تطبيق مالية شخصي عربي: إيرادات الإيجارات، مصروفات اليوم، المستحق غير المحصَّل، والادخار. تطبيق ثابت (PWA) بلا أي تبعيات.",
+  "keywords": ["finance", "arabic", "rtl", "pwa", "offline", "libya", "rent"],
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node tests/check.mjs && node tests/dom-smoke.mjs && node tests/selftest-agent.mjs && node tests/selftest-pwa.mjs",
+    "test:numbers": "node tests/check.mjs",
+    "test:views": "node tests/dom-smoke.mjs",
+    "test:agent": "node tests/selftest-agent.mjs",
+    "test:pwa": "node tests/selftest-pwa.mjs",
+    "audit": "node tests/tools/render-audit.mjs",
+    "icons": "node tools/make-icons.mjs",
+    "syntax": "node tests/tools/check-syntax.mjs",
+    "serve": "node tools/serve.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
