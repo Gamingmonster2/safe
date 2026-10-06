@@ -876,6 +876,69 @@ if (bootResult) {
   eq('اتجاه الدخل = صعود', iconCheck.dirIncome, 'arrowUp');
   eq('اتجاه المصروف = هبوط', iconCheck.dirExpense, 'arrowDown');
   check('عدد الأيقونات المتاحة ≥ 70', iconCheck.count >= 70, iconCheck.count, '>= 70');
+
+  /* كل أيقونة تُبنى فعلاً: عنصر <svg> فيه عناصر رسم صحيحة (يمنع أيقونات صامتة فارغة).
+     نبني DOM مصغّراً حقيقياً هنا لأن stubEl العام مبسّط ولا يتتبّع الأبناء. */
+  const svgBuilt = (() => {
+    function makeNode(tag) {
+      const n = {
+        tagName: String(tag), childNodes: [], attributes: {}, className: '',
+        appendChild(c) { this.childNodes.push(c); c.parentNode = this; return c; },
+        setAttribute(k, v) { this.attributes[k] = String(v); if (k === 'class') this.className = String(v); },
+        getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attributes, k) ? this.attributes[k] : null; },
+        querySelector() { return null; }, querySelectorAll() { return []; },
+        addEventListener() {}, removeEventListener() {},
+        get firstChild() { return this.childNodes[0] || null; }
+      };
+      return n;
+    }
+    const doc = {
+      createElement: (t) => makeNode(t),
+      createElementNS: (ns, t) => makeNode(t),
+      createTextNode: (t) => ({ nodeType: 3, textContent: String(t), childNodes: [] }),
+      getElementById: () => null, querySelector: () => null, querySelectorAll: () => [],
+      addEventListener() {}, removeEventListener() {}, body: makeNode('body'), documentElement: makeNode('html')
+    };
+    const box = {
+      document: doc, window: { addEventListener() {}, matchMedia: () => ({ matches: false, addEventListener() {} }) },
+      navigator: { userAgent: 'node' }, console, setTimeout, clearTimeout, Intl, JSON, Math, Date,
+      localStorage: undefined
+    };
+    box.globalThis = box;
+    const c2 = vm.createContext(box);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, 'assets/js/icons.js'), 'utf8'), c2, { filename: 'icons.js' });
+    return vm.runInContext(
+      `(function () {
+         var out = { total: 0, empty: [], noPath: [], badAttr: [] };
+         Fin.I.names().forEach(function (name) {
+           out.total++;
+           var wrap = Fin.I.el(name);
+           var svg = null;
+           (wrap.childNodes || []).forEach(function (c) { if (String(c.tagName).toLowerCase() === 'svg') svg = c; });
+           if (!svg) { out.empty.push(name); return; }
+           if (svg.getAttribute('stroke') !== 'currentColor') out.badAttr.push(name + ':stroke');
+           if (!svg.getAttribute('viewBox')) out.badAttr.push(name + ':viewBox');
+           var drawable = (svg.childNodes || []).filter(function (k) {
+             return ['path','circle','rect','ellipse','line','polyline','polygon'].indexOf(String(k.tagName).toLowerCase()) >= 0;
+           });
+           if (!drawable.length) { out.noPath.push(name); return; }
+           drawable.forEach(function (d) {
+             var t = String(d.tagName).toLowerCase();
+             if (t === 'path' && !d.getAttribute('d')) out.badAttr.push(name + ':path بلا d');
+             if (t === 'circle' && (!d.getAttribute('cx') || !d.getAttribute('r'))) out.badAttr.push(name + ':circle ناقص');
+             if (t === 'rect' && (!d.getAttribute('width') || !d.getAttribute('height'))) out.badAttr.push(name + ':rect ناقص');
+           });
+         });
+         return out;
+       })()`,
+      c2
+    );
+  })();
+  check('كل الأيقونات (' + svgBuilt.total + ') تُبنى كعنصر SVG حقيقي', svgBuilt.empty.length === 0, svgBuilt.empty.slice(0, 6).join(', '));
+  eq('لا أيقونة بلا عنصر رسم داخلي', svgBuilt.noPath.length, 0);
+  eq('لا أيقونة بسمات ناقصة (stroke/viewBox/مسار)', svgBuilt.badAttr.length, 0);
+  if (svgBuilt.badAttr.length) line('       ' + svgBuilt.badAttr.slice(0, 8).join(' | '));
+  check('عدد الأيقونات المبنيّة = عدد الأسماء المعرّفة', svgBuilt.total === iconCheck.count, svgBuilt.total + ' / ' + iconCheck.count);
 }
 
 /* ================================================ ملاحظات العقد (غير محسوبة) */
