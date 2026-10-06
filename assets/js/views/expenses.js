@@ -11,20 +11,38 @@
   var C = Fin.C, U = Fin.U, UI = Fin.UI, Store = Fin.Store, F = Fin.Finance;
   Fin.Views = Fin.Views || {};
 
+  /* أيقونة SVG احترافية من icons.js (بديل الإيموجي) */
+  function icon(name, opts) {
+    opts = opts || {};
+    if (!Fin.I) return U.el('span', { class: 'ic-wrap' });
+    var key = (name && Fin.I.has(name)) ? name : (opts.fallback || 'package');
+    return Fin.I.el(key, { size: opts.size || 20, tone: opts.tone || null });
+  }
+
+  /* حالة فراغ بأيقونة SVG (بنفس بنية UI.emptyState) */
+  function emptyBox(name, title, body) {
+    return U.el('div', { class: 'empty' }, [
+      U.el('div', { class: 'empty-ico' }, [icon(name, { size: 36 })]),
+      U.el('div', { class: 'empty-title', text: title || 'لا يوجد شيء بعد' }),
+      body ? U.el('div', { class: 'empty-body', text: body }) : null
+    ]);
+  }
+
   /* ------------------------------------------------- أدوات محلية (بلا DOM عام) */
 
+  // القوائم المنسدلة تعرض النص فقط — الأيقونة لا تظهر داخل <option>
   function catOptions() {
-    return C.EXPENSE_CATEGORIES.map(function (c) { return { value: c.key, label: c.icon + ' ' + c.label }; });
+    return C.EXPENSE_CATEGORIES.map(function (c) { return { value: c.key, label: c.label }; });
   }
   function accountOptions(state) {
     return (state.accounts || []).map(function (a) { return { value: a.id, label: a.name }; });
   }
   function methodOptions() {
-    return C.PAYMENT_METHODS.map(function (m) { return { value: m.key, label: m.icon + ' ' + m.label }; });
+    return C.PAYMENT_METHODS.map(function (m) { return { value: m.key, label: m.label }; });
   }
   function locationOptions(state) {
     return [{ value: '', label: '— بلا مكان —' }].concat((state.locations || C.LOCATIONS).map(function (l) {
-      return { value: l.id, label: l.icon + ' ' + l.name };
+      return { value: l.id, label: l.name };
     }));
   }
   function matchRange(list, key) {
@@ -190,10 +208,10 @@
 
     /* ---------------------------------------------------------- الأرقام */
     rootEl.appendChild(UI.statGrid([
-      UI.stat({ icon: '💸', label: 'مصروف الفترة', tone: 'expense', value: U.fmtMoney(sum.expense), sub: range.label }),
-      UI.stat({ icon: '🧾', label: 'عدد المعاملات', value: U.fmtNumber(sum.txCount), sub: sum.unpaidCount ? (sum.unpaidCount + ' لم تُسدَّد بـ ' + U.fmtMoney(sum.unpaid)) : 'كلها مدفوعة' }),
-      UI.stat({ icon: '📅', label: 'متوسط اليوم', value: U.fmtMoney(U.round1(avg)), sub: days + ' يوم في الفترة', tone: 'warn' }),
-      UI.stat({ icon: '📈', label: 'الصافي (دخل − مصروف)', tone: sum.net >= 0 ? 'income' : 'expense', value: U.fmtMoney(sum.net, { sign: true }), sub: 'دخل ' + U.fmtMoney(sum.income) })
+      UI.stat({ icon: 'trendDown', label: 'مصروف الفترة', tone: 'expense', valueClass: 'tx-expense', value: U.fmtMoney(sum.expense), sub: range.label }),
+      UI.stat({ icon: 'receipt', label: 'عدد المعاملات', value: U.fmtNumber(sum.txCount), sub: sum.unpaidCount ? (sum.unpaidCount + ' لم تُسدَّد بـ ' + U.fmtMoney(sum.unpaid)) : 'كلها مدفوعة' }),
+      UI.stat({ icon: 'calendar', label: 'متوسط اليوم', value: U.fmtMoney(U.round1(avg)), sub: days + ' يوم في الفترة', tone: 'warn', valueClass: 'tx-warn' }),
+      UI.stat({ icon: 'trendUp', label: 'الصافي (دخل − مصروف)', tone: sum.net >= 0 ? 'income' : 'expense', valueClass: sum.net >= 0 ? 'tx-income' : 'tx-expense', value: U.fmtMoney(sum.net, { sign: true }), sub: 'دخل ' + U.fmtMoney(sum.income) })
     ]));
 
     /* --------------------------------------------------------- إضافة سريعة */
@@ -205,7 +223,7 @@
         title: 'إضافة ' + cat.label + (cat.quick ? ' — ' + U.fmtMoney(cat.quick) : ''),
         onClick: function () { openAddModal(ctx, key); }
       }, [
-        U.el('span', { class: 'quick-ico', text: cat.icon }),
+        U.el('span', { class: 'quick-ico' }, [icon(cat.icon, { size: 22, tone: 'out', fallback: 'package' })]),
         U.el('span', { class: 'quick-label', text: cat.label }),
         U.el('span', { class: 'quick-hint', text: cat.quick ? U.fmtMoney(cat.quick, { currency: false }) : 'بالمبلغ' })
       ]);
@@ -215,7 +233,7 @@
       quickGrid,
       U.el('div', { class: 'summary-strip' }, [
         U.el('span', { class: 'muted', text: 'اضغط الفئة → مبلغ مقترح → «إضافة».' }),
-        UI.btn('＋ مصروف بالتفصيل', { tone: 'primary', className: 'btn-sm', onClick: function () { openAddModal(ctx, null); } })
+        UI.btn('مصروف بالتفصيل', { icon: 'plus', tone: 'primary', className: 'btn-sm', onClick: function () { openAddModal(ctx, null); } })
       ])
     ]));
 
@@ -236,20 +254,19 @@
       ]);
 
       var topRows = cats.slice(0, 6).map(function (c) {
-        var cpm = C.catExpense(c.key);
         return U.el('div', { class: 'list-item' }, [
-          U.el('span', { class: 'ico', text: cpm.icon }),
+          UI.catIcon({ key: c.key, type: 'expense' }, 'out'),
           U.el('div', { class: 'tx-main' }, [
             U.el('div', { class: 'tx-title', text: c.label }),
             U.el('div', { class: 'tx-meta' }, [U.el('span', { text: c.count + ' معاملة · ' + U.fmtPct(c.pct) + ' من المصروف' })])
           ]),
-          U.el('div', { class: 'tx-amount tx-expense', text: U.fmtMoney(c.amount) })
+          UI.amountBlock(c.amount, false, { currency: false })
         ]);
       });
 
       rootEl.appendChild(UI.section('توزيع الفئات', [
         UI.card({ body: donutBox }),
-        UI.card({ title: 'أكبر البنود', icon: '📊', body: UI.list(topRows, { empty: null }) })
+        UI.card({ title: 'أكبر البنود', icon: 'chart', body: UI.list(topRows, { empty: null }) })
       ]));
     }
 
@@ -289,7 +306,7 @@
     ]));
 
     /* ------------------------------------------------------- زر كامل العرض */
-    rootEl.appendChild(UI.btn('＋ إضافة مصروف', { tone: 'primary', className: 'btn-block', onClick: function () { openAddModal(ctx, null); } }));
+    rootEl.appendChild(UI.btn('إضافة مصروف', { icon: 'plus', tone: 'primary', className: 'btn-block', onClick: function () { openAddModal(ctx, null); } }));
   }
 
   function buildTxList(state, range, ctx) {
@@ -301,7 +318,7 @@
     var txs = F.txInRange(state, range.from, range.to, opts);
 
     if (!txs.length) {
-      return UI.emptyState('🔍', 'لا توجد مصروفات مطابقة', query ? ('لا نتائج لـ «' + query + '»') : 'جرّب توسيع الفترة أو أضف مصروفاً بضغطة.');
+      return emptyBox('search', 'لا توجد مصروفات مطابقة', query ? ('لا نتائج لـ «' + query + '»') : 'جرّب توسيع الفترة أو أضف مصروفاً بضغطة.');
     }
 
     /* تجميع حسب اليوم (الأحدث أولاً) */
@@ -336,7 +353,7 @@
   Fin.Views.expenses = {
     id: 'expenses',
     title: 'المصروفات',
-    icon: '💸',
+    icon: 'receipt',
     order: 2,
     subtitle: 'إضافة بضغطة وتوزيع الفئات',
     render: render,

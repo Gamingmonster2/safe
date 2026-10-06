@@ -39,18 +39,18 @@
   };
 
   C.ACCOUNTS = [
-    { id: 'cash', name: 'الصندوق (نقد)', kind: 'cash', opening: C.OPENING.cash, icon: '💵', order: 1 },
-    { id: 'saving', name: 'مدخرات / احتياطي', kind: 'saving', opening: C.OPENING.saving, icon: '🏦', order: 2 }
+    { id: 'cash', name: 'الصندوق (نقد)', kind: 'cash', opening: C.OPENING.cash, icon: 'cash', order: 1 },
+    { id: 'saving', name: 'مدخرات / احتياطي', kind: 'saving', opening: C.OPENING.saving, icon: 'bank', order: 2 }
   ];
 
   /* ---------------------------------------------------------------- الأماكن */
   C.LOCATIONS = [
-    { id: 'shop', name: 'المحل (بجانب البيت)', kind: 'rent', icon: '🏪', note: 'إيجار شهري 1,500 — يُدفع كل شهر' },
-    { id: 'studio', name: 'استوديو فوق المحل', kind: 'rent', icon: '🏠', note: '2,000 كل ثلاثة أشهر (أكتوبر + نوفمبر + ديسمبر)' },
-    { id: 'workshops', name: 'ورشة السمكرة والطلاء', kind: 'workshop', area: 300, icon: '🎨', note: 'أرض ~300م² حُوّلت إلى ورشة سمكرة وطلاء — 1,900' },
-    { id: 'mech', name: 'الورشة الميكانيكية', kind: 'workshop', icon: '🔧', note: '1,500' },
-    { id: 'rooms', name: 'حجرات العمال', kind: 'rent', icon: '🛏️', note: 'كانت ورشة وحُوّلت إلى حجرات — 2,000' },
-    { id: 'other', name: 'مصادر أخرى', kind: 'other', icon: '➕', note: 'دعم الوالد، بيع شيء، دخل إنترنت…' }
+    { id: 'shop', name: 'المحل (بجانب البيت)', kind: 'rent', icon: 'store', note: 'إيجار شهري 1,500 — يُدفع كل شهر' },
+    { id: 'studio', name: 'استوديو فوق المحل', kind: 'rent', icon: 'house', note: '2,000 كل ثلاثة أشهر (أكتوبر + نوفمبر + ديسمبر)' },
+    { id: 'workshops', name: 'ورشة السمكرة والطلاء', kind: 'workshop', area: 300, icon: 'workshop', note: 'أرض ~300م² حُوّلت إلى ورشة سمكرة وطلاء — 1,900' },
+    { id: 'mech', name: 'الورشة الميكانيكية', kind: 'workshop', icon: 'wrench', note: '1,500' },
+    { id: 'rooms', name: 'حجرات العمال', kind: 'rent', icon: 'bed', note: 'كانت ورشة وحُوّلت إلى حجرات — 2,000' },
+    { id: 'other', name: 'مصادر أخرى', kind: 'other', icon: 'plus', note: 'دعم الوالد، بيع شيء، دخل إنترنت…' }
   ];
 
   /* ---------------------------------------------------- قوالب الإيجار (الاستحقاق) */
@@ -111,17 +111,17 @@
      - رسوم المدرسة السنوية 6,000 دُفعت منها 1,000 → المتبقي 5,000 خطّة سنوية (C.COMMITMENTS).
      - بطاقة النطاق 180 وصلت بيد شخص وسيُسدَّد له عند التجديد. */
   C.OBLIGATIONS = [
-    { key: 'domain_renewal', label: 'تجديد نطاق .org (القرآن الكريم — صدقة)', amount: 180, category: 'domain_hosting', icon: '🌐', paid: false, note: 'البطاقة وصلتني من شخص وسأسدّد عند التجديد', upcoming: true },
-    { key: 'school_books', label: 'كتب ابنتي (مدرسة خاصة)', amount: 950, category: 'school_books', icon: '📚', paid: false, note: 'لم أشترِها بعد', upcoming: true },
-    { key: 'school_uniform', label: 'الزي الجديد', amount: 450, category: 'clothes', icon: '👕', paid: false, note: 'تقديري', upcoming: true },
-    { key: 'fuel', label: 'تعبئة البنزين', amount: 100, category: 'fuel', icon: '⛽', paid: false, note: 'مصروف متكرر — قيمة تقديرية', upcoming: true }
+    { key: 'domain_renewal', label: 'تجديد نطاق .org (القرآن الكريم — صدقة)', amount: 180, category: 'domain_hosting', icon: 'globe', paid: false, note: 'البطاقة وصلتني من شخص وسأسدّد عند التجديد', upcoming: true },
+    { key: 'school_books', label: 'كتب ابنتي (مدرسة خاصة)', amount: 950, category: 'school_books', icon: 'book', paid: false, note: 'لم أشترِها بعد', upcoming: true },
+    { key: 'school_uniform', label: 'الزي الجديد', amount: 450, category: 'clothes', icon: 'shirt', paid: false, note: 'تقديري', upcoming: true },
+    { key: 'fuel', label: 'تعبئة البنزين', amount: 100, category: 'fuel', icon: 'fuel', paid: false, note: 'مصروف متكرر — قيمة تقديرية', upcoming: true }
   ];
   C.OBLIGATIONS_TOTAL = C.OBLIGATIONS.reduce(function (s, e) { return s + e.amount; }, 0); // 1,680
 
   /* التزامات سنوية (خطط، ليست ديوناً): تُعرض كمعلومة فقط ولا تدخل في الالتزامات الفورية */
   C.COMMITMENTS = [
     {
-      key: 'school_annual', label: 'رسوم المدرسة السنوية', icon: '🏫',
+      key: 'school_annual', label: 'رسوم المدرسة السنوية', icon: 'school',
       annual: 6000, paidThisYear: 1000, remaining: 5000,
       paidOn: '2026-10-05', category: 'school_tuition',
       note: 'التكلفة 6,000 في السنة — دُفعت 1,000، والمتبقي يُسدَّد على دفعات خلال السنة'
@@ -143,61 +143,61 @@
   /* =========================================================== مصروفات اليوم */
   /* 5 أكتوبر: 302 د.ل موزّعة كما في القصة بالحرف */
   C.DAILY_EXPENSES = [
-    { key: 'plumbing_help', label: 'أنبوب حديدي لتصريف مياه المطر + أجرة الصديق السوداني', amount: 120, category: 'other', icon: '🚰', note: 'خدمة الماء في ورشة السمكرة — 100 أجرة + 20 أنبوب، جاء بتاكسي' },
-    { key: 'coffee_cigarettes', label: 'قهوة وسجائر وفطور', amount: 22, category: 'coffee_cigarettes', icon: '☕' },
-    { key: 'vegetables', label: 'خضار وفواكه', amount: 85, category: 'vegetables', icon: '🥬' },
-    { key: 'groceries', label: 'مواد غذائية من محل المواد الغذائية', amount: 60, category: 'groceries', icon: '🛒' },
-    { key: 'bread', label: 'خبز + ملحقات (مخبز)', amount: 15, category: 'bakery', icon: '🍞' }
+    { key: 'plumbing_help', label: 'أنبوب حديدي لتصريف مياه المطر + أجرة الصديق السوداني', amount: 120, category: 'other', icon: 'wrench', note: 'خدمة الماء في ورشة السمكرة — 100 أجرة + 20 أنبوب، جاء بتاكسي' },
+    { key: 'coffee_cigarettes', label: 'قهوة وسجائر وفطور', amount: 22, category: 'coffee_cigarettes', icon: 'coffee' },
+    { key: 'vegetables', label: 'خضار وفواكه', amount: 85, category: 'vegetables', icon: 'leaf' },
+    { key: 'groceries', label: 'مواد غذائية من محل المواد الغذائية', amount: 60, category: 'groceries', icon: 'basket' },
+    { key: 'bread', label: 'خبز + ملحقات (مخبز)', amount: 15, category: 'bakery', icon: 'bread' }
   ];
   C.DAILY_EXPENSES_TOTAL = C.DAILY_EXPENSES.reduce(function (s, e) { return s + e.amount; }, 0); // 302
 
   /* ------------------------------------------------------------ فئات المصروفات */
   C.EXPENSE_CATEGORIES = [
-    { key: 'household', label: 'مصروف البيت', icon: '🏠', group: 'الأساسيات', color: 'var(--c-expense)' },
-    { key: 'vegetables', label: 'خضار وفواكه', icon: '🥬', group: 'الأساسيات', color: '#22c55e', quick: 85 },
-    { key: 'groceries', label: 'مواد غذائية', icon: '🛒', group: 'الأساسيات', color: '#16a34a', quick: 60 },
-    { key: 'bakery', label: 'خبز ومخبز', icon: '🍞', group: 'الأساسيات', color: '#d97706', quick: 15 },
-    { key: 'meat', label: 'لحم ودجاج', icon: '🍗', group: 'الأساسيات', color: '#dc2626' },
-    { key: 'fuel', label: 'بنزين ووقود', icon: '⛽', group: 'التنقل', color: '#0ea5e9', quick: 100 },
-    { key: 'transport', label: 'مواصلات وتاكسي', icon: '🚕', group: 'التنقل', color: '#0284c7' },
-    { key: 'coffee_cigarettes', label: 'قهوة وسجائر', icon: '☕', group: 'اليوميات', color: '#a16207', quick: 22 },
-    { key: 'restaurant', label: 'مطعم / أكل جاهز', icon: '🍽️', group: 'اليوميات', color: '#ea580c' },
-    { key: 'clothes', label: 'ملابس وأزياء', icon: '👕', group: 'الشخصي', color: '#7c3aed' },
-    { key: 'phone_internet', label: 'هاتف وإنترنت', icon: '📱', group: 'الشخصي', color: '#4f46e5' },
-    { key: 'health', label: 'صحة وعلاج', icon: '💊', group: 'الشخصي', color: '#e11d48' },
-    { key: 'school_tuition', label: 'رسوم المدرسة', icon: '🏫', group: 'الأسرة والتعليم', color: '#2563eb' },
-    { key: 'school_books', label: 'كتب وقرطاسية', icon: '📚', group: 'الأسرة والتعليم', color: '#1d4ed8' },
-    { key: 'family', label: 'مصروف الأسرة', icon: '👨‍👩‍👧', group: 'الأسرة والتعليم', color: '#0891b2' },
-    { key: 'maintenance', label: 'صيانة وتصليح', icon: '🧰', group: 'الأعمال', color: '#65a30d', quick: 120 },
-    { key: 'workshop_supplies', label: 'مواد ومستلزمات الورشة', icon: '🪛', group: 'الأعمال', color: '#ca8a04' },
-    { key: 'workers', label: 'أجور عمال', icon: '👷', group: 'الأعمال', color: '#f97316' },
-    { key: 'domain_hosting', label: 'نطاقات واستضافة', icon: '🌐', group: 'الأعمال', color: '#7c3aed', quick: 180 },
-    { key: 'charity', label: 'صدقة وزكاة', icon: '🤲', group: 'أخرى', color: '#10b981' },
-    { key: 'family_support', label: 'مساعدة الأهل', icon: '🤝', group: 'أخرى', color: '#059669' },
-    { key: 'debt_payment', label: 'سداد دين / سلفة', icon: '📉', group: 'أخرى', color: '#9f1239' },
-    { key: 'other', label: 'مصروف آخر', icon: '📦', group: 'أخرى', color: '#64748b' }
+    { key: 'household', label: 'مصروف البيت', icon: 'house', group: 'الأساسيات', color: 'var(--c-expense)' },
+    { key: 'vegetables', label: 'خضار وفواكه', icon: 'leaf', group: 'الأساسيات', color: '#22c55e', quick: 85 },
+    { key: 'groceries', label: 'مواد غذائية', icon: 'basket', group: 'الأساسيات', color: '#16a34a', quick: 60 },
+    { key: 'bakery', label: 'خبز ومخبز', icon: 'bread', group: 'الأساسيات', color: '#d97706', quick: 15 },
+    { key: 'meat', label: 'لحم ودجاج', icon: 'meat', group: 'الأساسيات', color: '#dc2626' },
+    { key: 'fuel', label: 'بنزين ووقود', icon: 'fuel', group: 'التنقل', color: '#0ea5e9', quick: 100 },
+    { key: 'transport', label: 'مواصلات وتاكسي', icon: 'car', group: 'التنقل', color: '#0284c7' },
+    { key: 'coffee_cigarettes', label: 'قهوة وسجائر', icon: 'coffee', group: 'اليوميات', color: '#a16207', quick: 22 },
+    { key: 'restaurant', label: 'مطعم / أكل جاهز', icon: 'utensils', group: 'اليوميات', color: '#ea580c' },
+    { key: 'clothes', label: 'ملابس وأزياء', icon: 'shirt', group: 'الشخصي', color: '#7c3aed' },
+    { key: 'phone_internet', label: 'هاتف وإنترنت', icon: 'phone', group: 'الشخصي', color: '#4f46e5' },
+    { key: 'health', label: 'صحة وعلاج', icon: 'pills', group: 'الشخصي', color: '#e11d48' },
+    { key: 'school_tuition', label: 'رسوم المدرسة', icon: 'school', group: 'الأسرة والتعليم', color: '#2563eb' },
+    { key: 'school_books', label: 'كتب وقرطاسية', icon: 'book', group: 'الأسرة والتعليم', color: '#1d4ed8' },
+    { key: 'family', label: 'مصروف الأسرة', icon: 'family', group: 'الأسرة والتعليم', color: '#0891b2' },
+    { key: 'maintenance', label: 'صيانة وتصليح', icon: 'tools', group: 'الأعمال', color: '#65a30d', quick: 120 },
+    { key: 'workshop_supplies', label: 'مواد ومستلزمات الورشة', icon: 'tools', group: 'الأعمال', color: '#ca8a04' },
+    { key: 'workers', label: 'أجور عمال', icon: 'helmet', group: 'الأعمال', color: '#f97316' },
+    { key: 'domain_hosting', label: 'نطاقات واستضافة', icon: 'globe', group: 'الأعمال', color: '#7c3aed', quick: 180 },
+    { key: 'charity', label: 'صدقة وزكاة', icon: 'prayer', group: 'أخرى', color: '#10b981' },
+    { key: 'family_support', label: 'مساعدة الأهل', icon: 'handshake', group: 'أخرى', color: '#059669' },
+    { key: 'debt_payment', label: 'سداد دين / سلفة', icon: 'trendDown', group: 'أخرى', color: '#9f1239' },
+    { key: 'other', label: 'مصروف آخر', icon: 'package', group: 'أخرى', color: '#64748b' }
   ];
 
   /* ------------------------------------------------------------ فئات الإيرادات */
   C.INCOME_CATEGORIES = [
-    { key: 'rent_shop', label: 'إيجار المحل', icon: '🏪', group: 'الإيجارات', color: '#22c55e' },
-    { key: 'rent_studio', label: 'إيجار الاستوديو', icon: '🏠', group: 'الإيجارات', color: '#16a34a' },
-    { key: 'rent_workshop', label: 'إيجار الورش (سمكرة/ميكانيكا)', icon: '🔧', group: 'الإيجارات', color: '#15803d' },
-    { key: 'rent_rooms', label: 'إيجار حجرات العمال', icon: '🛏️', group: 'الإيجارات', color: '#166534' },
-    { key: 'rent_other', label: 'إيجار آخر', icon: '🏘️', group: 'الإيجارات', color: '#4ade80' },
-    { key: 'family', label: 'من الوالد / الأسرة', icon: '👨‍👦', group: 'أخرى', color: '#0891b2' },
-    { key: 'online', label: 'دخل إنترنت / عمل حر', icon: '💻', group: 'أخرى', color: '#6366f1' },
-    { key: 'sale', label: 'بيع شيء', icon: '🏷️', group: 'أخرى', color: '#f59e0b' },
-    { key: 'reimbursement', label: 'استرداد / سلفة رجعت', icon: '↩️', group: 'أخرى', color: '#14b8a6' },
-    { key: 'gift', label: 'هدية / صدقة لي', icon: '🎁', group: 'أخرى', color: '#a855f7' },
-    { key: 'other_income', label: 'دخل آخر', icon: '➕', group: 'أخرى', color: '#64748b' }
+    { key: 'rent_shop', label: 'إيجار المحل', icon: 'store', group: 'الإيجارات', color: '#22c55e' },
+    { key: 'rent_studio', label: 'إيجار الاستوديو', icon: 'house', group: 'الإيجارات', color: '#16a34a' },
+    { key: 'rent_workshop', label: 'إيجار الورش (سمكرة/ميكانيكا)', icon: 'wrench', group: 'الإيجارات', color: '#15803d' },
+    { key: 'rent_rooms', label: 'إيجار حجرات العمال', icon: 'bed', group: 'الإيجارات', color: '#166534' },
+    { key: 'rent_other', label: 'إيجار آخر', icon: 'building', group: 'الإيجارات', color: '#4ade80' },
+    { key: 'family', label: 'من الوالد / الأسرة', icon: 'family', group: 'أخرى', color: '#0891b2' },
+    { key: 'online', label: 'دخل إنترنت / عمل حر', icon: 'globe', group: 'أخرى', color: '#6366f1' },
+    { key: 'sale', label: 'بيع شيء', icon: 'tag', group: 'أخرى', color: '#f59e0b' },
+    { key: 'reimbursement', label: 'استرداد / سلفة رجعت', icon: 'swap', group: 'أخرى', color: '#14b8a6' },
+    { key: 'gift', label: 'هدية / صدقة لي', icon: 'sparkles', group: 'أخرى', color: '#a855f7' },
+    { key: 'other_income', label: 'دخل آخر', icon: 'plus', group: 'أخرى', color: '#64748b' }
   ];
 
   C.PAYMENT_METHODS = [
-    { key: 'cash', label: 'نقد', icon: '💵' },
-    { key: 'transfer', label: 'تحويل / مصرف', icon: '🏦' },
-    { key: 'card', label: 'بطاقة', icon: '💳' },
-    { key: 'credit', label: 'على الحساب (لم أسدّد)', icon: '🧾' }
+    { key: 'cash', label: 'نقد', icon: 'cash' },
+    { key: 'transfer', label: 'تحويل / مصرف', icon: 'bank' },
+    { key: 'card', label: 'بطاقة', icon: 'creditCard' },
+    { key: 'credit', label: 'على الحساب (لم أسدّد)', icon: 'receipt' }
   ];
 
   C.THEMES = ['dark', 'light', 'auto'];
@@ -210,11 +210,11 @@
   C.DOMAIN_PRICE_BY_TLD = { 'com': 180, 'org': 180, 'net': 180, 'com.ly': 15, 'ly': 15, 'org.ly': 15 };
 
   C.DOMAIN_STATUS = {
-    expired: { label: 'سقط — جدّده فوراً', tone: 'danger', icon: '⛔', order: 0 },
-    critical: { label: 'تجديد فوري', tone: 'danger', icon: '🔥', order: 1 },
-    soon: { label: 'قريب الانتهاء', tone: 'warn', icon: '⏰', order: 2 },
-    watch: { label: 'للمتابعة', tone: 'info', icon: '👀', order: 3 },
-    ok: { label: 'بعيد', tone: 'muted', icon: '✅', order: 4 }
+    expired: { label: 'سقط — جدّده فوراً', tone: 'danger', icon: 'alert', order: 0 },
+    critical: { label: 'تجديد فوري', tone: 'danger', icon: 'flame', order: 1 },
+    soon: { label: 'قريب الانتهاء', tone: 'warn', icon: 'clock', order: 2 },
+    watch: { label: 'للمتابعة', tone: 'info', icon: 'eye', order: 3 },
+    ok: { label: 'بعيد', tone: 'muted', icon: 'checkCircle', order: 4 }
   };
 
   /* أول دفعة من النطاقات (ما أدخله المستخدم اليوم 5 أكتوبر 2026).
@@ -232,19 +232,19 @@
   C.DOMAINS_COUNT_HINT = 'لديك نحو 150 نطاقاً — هذه أول دفعة، والباقي يُضاف من شاشة النطاقات.';
 
   C.NAV = [
-    { id: 'dashboard', title: 'اليوم', icon: '🏠', order: 1 },
-    { id: 'expenses', title: 'المصروفات', icon: '💸', order: 2 },
-    { id: 'income', title: 'الإيرادات', icon: '💰', order: 3 },
-    { id: 'accounts', title: 'الحسابات', icon: '🏦', order: 4 },
-    { id: 'reports', title: 'التقارير', icon: '📊', order: 5 },
-    { id: 'domains', title: 'النطاقات', icon: '🌐', order: 6 },
-    { id: 'settings', title: 'الإعدادات', icon: '⚙️', order: 7 }
+    { id: 'dashboard', title: 'اليوم', icon: 'home', order: 1 },
+    { id: 'expenses', title: 'المصروفات', icon: 'receipt', order: 2 },
+    { id: 'income', title: 'الإيرادات', icon: 'wallet', order: 3 },
+    { id: 'accounts', title: 'الحسابات', icon: 'bank', order: 4 },
+    { id: 'reports', title: 'التقارير', icon: 'chart', order: 5 },
+    { id: 'domains', title: 'النطاقات', icon: 'globe', order: 6 },
+    { id: 'settings', title: 'الإعدادات', icon: 'settings', order: 7 }
   ];
 
   /* ترتيب التبويبات السفلية. شاشات موجودة لكنها ليست تبويباً:
-     agent → يُفتح من أيقونة 🤖 في الرأس، لأن 7 تبويبات هو أقصى ما يتحمله عرض الجوال. */
+     agent → يُفتح من أيقونة المساعد في الرأس، لأن 7 تبويبات هو أقصى ما يتحمله عرض الجوال. */
   C.NAV_ORDER = ['dashboard', 'expenses', 'income', 'accounts', 'reports', 'domains', 'settings'];
-  C.HEADER_LINKS = [{ id: 'agent', title: 'المساعد الذكي', icon: '🤖' }];
+  C.HEADER_LINKS = [{ id: 'agent', title: 'المساعد الذكي', icon: 'robot' }];
 
   /* معرّفات ثابتة لنطاقات البذرة — ضرورية للتعديل/التجديد/الحذف.
      النطاقات المضافة لاحقاً تأخذ معرّفاً مُولَّداً من Store.addDomain. */
@@ -256,11 +256,11 @@
   /* ------------------------------------------------------------- دوال مساعدة */
   C.catExpense = function (key) {
     for (var i = 0; i < C.EXPENSE_CATEGORIES.length; i++) if (C.EXPENSE_CATEGORIES[i].key === key) return C.EXPENSE_CATEGORIES[i];
-    return { key: key || 'other', label: key || 'أخرى', icon: '📦', group: 'أخرى', color: 'var(--c-muted)' };
+    return { key: key || 'other', label: key || 'أخرى', icon: 'package', group: 'أخرى', color: 'var(--c-muted)' };
   };
   C.catIncome = function (key) {
     for (var i = 0; i < C.INCOME_CATEGORIES.length; i++) if (C.INCOME_CATEGORIES[i].key === key) return C.INCOME_CATEGORIES[i];
-    return { key: key || 'other_income', label: key || 'دخل آخر', icon: '➕', group: 'أخرى', color: 'var(--c-muted)' };
+    return { key: key || 'other_income', label: key || 'دخل آخر', icon: 'plus', group: 'أخرى', color: 'var(--c-muted)' };
   };
   C.cat = function (key, type) { return type === 'income' ? C.catIncome(key) : C.catExpense(key); };
   C.location = function (id) {
@@ -273,7 +273,7 @@
   };
   C.method = function (key) {
     for (var i = 0; i < C.PAYMENT_METHODS.length; i++) if (C.PAYMENT_METHODS[i].key === key) return C.PAYMENT_METHODS[i];
-    return { key: key, label: key, icon: '•' };
+    return { key: key, label: key, icon: 'box' };
   };
   C.domainTld = function (name) {
     var s = String(name || '').toLowerCase().replace(/^www\./, '');

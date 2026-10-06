@@ -1,90 +1,137 @@
 /* =============================================================================
  * مصروفي — theme.css
- * كل الألوان والرموز هنا فقط. الوضعان: نهاري (light) وليلي (dark).
+ * هوية بصرية على نمط PayPal: أبيض + أزرق مفرح (نهاري)، كحلي عميق (ليلي).
+ * كل الألوان تُعرَّف هنا فقط — لا لون ثابت في أي ملف آخر.
  * ========================================================================== */
 
 :root {
-  /* دلالات ثابتة (نفسها في الوضعين) */
-  --c-income: #22c55e;
-  --c-income-soft: rgba(34, 197, 94, 0.14);
-  --c-expense: #f43f5e;
-  --c-expense-soft: rgba(244, 63, 94, 0.14);
-  --c-warn: #f59e0b;
-  --c-warn-soft: rgba(245, 158, 11, 0.14);
-  --c-danger: #ef4444;
-  --c-info: #38bdf8;
-  --c-saving: #f59e0b;
+  /* ---- الأزرق الأساسي (PayPal blue) ---- */
+  --brand-500: #0070ba;
+  --brand-600: #005ea6;
+  --brand-700: #003e7a;
+  --brand-100: #e8f3fb;
+  --brand-050: #f4f9fe;
 
-  --radius-sm: 10px;
-  --radius: 14px;
-  --radius-lg: 20px;
+  /* ---- دلالات مالية: صعود/هبوط ---- */
+  --in-500: #0f8a4d;        /* دخل (أخضر) */
+  --in-050: #e7f6ee;
+  --out-500: #d97706;       /* مصروف (برتقالي) */
+  --out-050: #fdf3e3;
+  --loss-500: #c0392b;      /* خسارة/تجاوز (أحمر) */
+  --loss-050: #fdecea;
+  --warn-500: #b45309;
+  --warn-050: #fdf4e3;
+  --info-500: #0070ba;
+  --info-050: #e8f3fb;
+
+  /* ---- رمزية ثابتة في الوضعين ---- */
+  --c-in: var(--in-500);
+  --c-out: var(--out-500);
+  --c-loss: var(--loss-500);
+  --c-warn: var(--warn-500);
+  --c-info: var(--info-500);
+  --c-income: var(--in-500);
+  --c-expense: var(--out-500);
+  --c-danger: var(--loss-500);
+  --c-saving: var(--brand-500);
+
+  /* ---- قياسات ---- */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
   --radius-full: 999px;
 
   --tap: 44px;
-  --gap: 12px;
+  --gap-xs: 6px;
   --gap-sm: 8px;
+  --gap: 12px;
   --gap-lg: 18px;
+  --gap-xl: 26px;
 
-  --font: "Segoe UI", "Noto Naskh Arabic", "Tahoma", system-ui, -apple-system, sans-serif;
-  --font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  --font: "Segoe UI", "Noto Naskh Arabic", "Tahoma", "Helvetica Neue", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Mono", "SF Mono", ui-monospace, "Consolas", monospace;
 
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.16);
-  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.22);
+  --dur: 0.16s;
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
 
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
 }
 
-/* ------------------------------------------------------------------ ليلي */
+/* ======================================================= الوضع النهاري */
 :root,
-[data-theme="dark"] {
-  --c-bg: #0b1020;
-  --c-bg-2: #10162a;
-  --c-surface: #141a2e;
-  --c-surface-2: #1b2338;
-  --c-surface-3: #232c45;
-  --c-text: #e8ecf6;
-  --c-text-2: #c3cbe0;
-  --c-muted: #8b95ad;
-  --c-border: #26304a;
-  --c-border-soft: rgba(255, 255, 255, 0.06);
-  --c-primary: #2f6df6;
-  --c-primary-2: #5b8cff;
-  --c-primary-soft: rgba(47, 109, 246, 0.16);
-  --c-on-primary: #ffffff;
-  --c-overlay: rgba(4, 7, 16, 0.72);
-  color-scheme: dark;
-}
-
-/* ----------------------------------------------------------------- نهاري */
 [data-theme="light"] {
-  --c-bg: #f4f6fb;
-  --c-bg-2: #eaeef8;
+  --c-bg: #f5f7fa;              /* رمادي بارد فاتح (خلفية PayPal) */
+  --c-bg-2: #eef1f6;
   --c-surface: #ffffff;
-  --c-surface-2: #f7f9fd;
-  --c-surface-3: #eef2fa;
-  --c-text: #101527;
-  --c-text-2: #2c3550;
-  --c-muted: #6b7488;
-  --c-border: #dde3f0;
-  --c-border-soft: rgba(16, 21, 39, 0.06);
-  --c-primary: #1d4ed8;
-  --c-primary-2: #3b6ef0;
-  --c-primary-soft: rgba(29, 78, 216, 0.1);
+  --c-surface-2: #f8fafc;
+  --c-surface-3: #eef2f7;
+  --c-text: #001c40;            /* كحلي داكن (نص PayPal) */
+  --c-text-2: #2b3a4f;
+  --c-muted: #5b6b7c;
+  --c-border: #dfe4ec;
+  --c-border-2: #c9d2de;
+  --c-border-soft: rgba(0, 28, 64, 0.06);
+  --c-primary: var(--brand-500);
+  --c-primary-2: var(--brand-600);
+  --c-primary-soft: var(--brand-100);
   --c-on-primary: #ffffff;
-  --c-overlay: rgba(20, 26, 46, 0.42);
-  --c-income: #16a34a;
-  --c-expense: #e11d48;
+  --c-overlay: rgba(0, 28, 64, 0.42);
+  --c-in-soft: var(--in-050);
+  --c-out-soft: var(--out-050);
+  --c-loss-soft: var(--loss-050);
+  --c-warn-soft: var(--warn-050);
+  --c-info-soft: var(--info-050);
+  --shadow-1: 0 1px 2px rgba(0, 28, 64, 0.08);
+  --shadow-2: 0 4px 14px rgba(0, 28, 64, 0.10);
+  --shadow-3: 0 12px 32px rgba(0, 28, 64, 0.16);
   color-scheme: light;
 }
 
+/* ========================================================= الوضع الليلي */
+[data-theme="dark"] {
+  --c-bg: #061428;              /* كحلي عميق (PayPal dark) */
+  --c-bg-2: #0a1c33;
+  --c-surface: #0e2038;
+  --c-surface-2: #132844;
+  --c-surface-3: #1b3252;
+  --c-text: #f2f6fb;
+  --c-text-2: #cfdaea;
+  --c-muted: #93a4bb;
+  --c-border: #1e3552;
+  --c-border-2: #2a4767;
+  --c-border-soft: rgba(255, 255, 255, 0.07);
+  --c-primary: #2f9fe0;
+  --c-primary-2: #5cb6ec;
+  --c-primary-soft: rgba(47, 159, 224, 0.16);
+  --c-on-primary: #04121f;
+  --c-overlay: rgba(2, 8, 18, 0.72);
+  --c-in: #34d07f;
+  --c-out: #f2a33c;
+  --c-loss: #f2705f;
+  --c-warn: #f2b53c;
+  --c-info: #4db3ea;
+  --c-income: #34d07f;
+  --c-expense: #f2a33c;
+  --c-danger: #f2705f;
+  --c-saving: #4db3ea;
+  --c-in-soft: rgba(52, 208, 127, 0.14);
+  --c-out-soft: rgba(242, 163, 60, 0.14);
+  --c-loss-soft: rgba(242, 112, 95, 0.14);
+  --c-warn-soft: rgba(242, 181, 60, 0.14);
+  --c-info-soft: rgba(77, 179, 234, 0.14);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 16px 40px rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+/* ================================================================= أساس */
 * { box-sizing: border-box; }
 
-html, body {
-  margin: 0;
-  padding: 0;
-  min-height: 100%;
-}
+html, body { margin: 0; padding: 0; min-height: 100%; }
 
 body {
   background: var(--c-bg);
@@ -95,42 +142,72 @@ body {
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
   overflow-x: hidden;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 
-::selection { background: var(--c-primary-soft); }
+::selection { background: var(--c-primary-soft); color: var(--c-text); }
 
-/* شرائط التمرير */
-* { scrollbar-width: thin; scrollbar-color: var(--c-surface-3) transparent; }
-*::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-thumb { background: var(--c-surface-3); border-radius: var(--radius-full); }
-*::-webkit-scrollbar-track { background: transparent; }
-
-h1, h2, h3, h4 { margin: 0; font-weight: 700; line-height: 1.35; }
-h1 { font-size: 20px; }
+h1, h2, h3, h4 { margin: 0; font-weight: 700; line-height: 1.35; letter-spacing: -0.01em; }
+h1 { font-size: 19px; }
 h2 { font-size: 17px; }
-h3 { font-size: 16px; }
+h3 { font-size: 15.5px; }
 p { margin: 0 0 8px; }
 a { color: var(--c-primary-2); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-button, input, select, textarea {
-  font-family: inherit;
-  font-size: inherit;
-  color: inherit;
-}
-
+button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
 input[type="date"] { direction: ltr; text-align: right; }
 
-.money { font-variant-numeric: tabular-nums; font-weight: 600; unicode-bidi: plaintext; }
-.tx-income { color: var(--c-income); }
-.tx-expense { color: var(--c-expense); }
+/* ============================================================ الأيقونات */
+.ic-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  line-height: 0;
+}
+.ic { display: block; }
+.ic-wrap[data-tone="in"] { color: var(--c-in); }
+.ic-wrap[data-tone="out"] { color: var(--c-out); }
+.ic-wrap[data-tone="loss"] { color: var(--c-loss); }
+.ic-wrap[data-tone="warn"] { color: var(--c-warn); }
+.ic-wrap[data-tone="info"] { color: var(--c-info); }
+.ic-wrap[data-tone="brand"] { color: var(--c-primary); }
+.ic-wrap[data-tone="muted"] { color: var(--c-muted); }
+
+/* ================================================================= المال */
+.money { font-variant-numeric: tabular-nums; font-weight: 700; unicode-bidi: plaintext; letter-spacing: -0.01em; }
+.tx-income, .amount-in { color: var(--c-in); }
+.tx-expense, .amount-out { color: var(--c-out); }
+.amount-loss { color: var(--c-loss); }
+.tx-warn { color: var(--c-warn); }
+
+/* شارة اتجاه: ▲ دخل · ▼ مصروف */
+.dir-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 7px 1px 5px;
+  border-radius: var(--radius-full);
+  line-height: 1.7;
+}
+.dir-badge.in { color: var(--c-in); background: var(--c-in-soft); }
+.dir-badge.out { color: var(--c-out); background: var(--c-out-soft); }
+
 .muted { color: var(--c-muted); }
 .text-2 { color: var(--c-text-2); }
 .nowrap { white-space: nowrap; }
 .center { text-align: center; }
 .hidden { display: none !important; }
 .mono { font-family: var(--font-mono); direction: ltr; }
+
+/* شريط تمرير رقيق */
+* { scrollbar-width: thin; scrollbar-color: var(--c-border-2) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--c-border-2); border-radius: var(--radius-full); }
+*::-webkit-scrollbar-track { background: transparent; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

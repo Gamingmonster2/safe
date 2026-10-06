@@ -796,7 +796,7 @@ if (bootResult) {
     readyState: 'complete', documentElement: stubEl(), body: stubEl(), head: stubEl(),
     addEventListener() {}, removeEventListener() {},
     getElementById() { return stubEl(); }, querySelector() { return stubEl(); },
-    querySelectorAll() { return []; }, createElement() { return stubEl(); },
+    querySelectorAll() { return []; }, createElement() { return stubEl(); }, createElementNS() { return stubEl(); },
     createTextNode(t) { return { textContent: String(t) }; }, createDocumentFragment() { return stubEl(); }
   };
   sandbox.window = {
@@ -833,6 +833,49 @@ if (bootResult) {
   const navMissing = boot.nav.filter((id) => !boot.views.includes(id));
   eq('كل تبويبات C.NAV لها شاشة مسجّلة (بما فيها المساعد)', navMissing.length, 0);
   if (navMissing.length) line('       تبويبات بلا شاشة: ' + navMissing.join(', '));
+
+  /* الهوية البصرية: أيقونات SVG احترافية بلا إيموجي في الواجهة */
+  const PICTO = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}✕]/u;
+  const uiFiles = ['assets/js/constants.js', 'assets/js/app.js', 'assets/js/ui.js', 'assets/js/icons.js']
+    .concat(fs.readdirSync(path.join(ROOT, 'assets/js/views')).map((f) => 'assets/js/views/' + f));
+
+  const offenders = [];
+  for (const rel of uiFiles) {
+    const srcLines = fs.readFileSync(path.join(ROOT, rel), 'utf8').split(/\r?\n/);
+    srcLines.forEach((l, i) => {
+      if (PICTO.test(l)) offenders.push(`${rel}:${i + 1}: ${l.trim().slice(0, 80)}`);
+    });
+  }
+  eq('لا إيموجي في أي ملف واجهة (أيقونات SVG فقط)', offenders.length, 0);
+  offenders.slice(0, 10).forEach((o) => line('       ' + o));
+
+  const iconCheck = vm.runInContext(
+    `(function () {
+       if (!Fin.I) return { ok: false };
+       var names = Fin.I.names();
+       var catsOk = Fin.C.EXPENSE_CATEGORIES.every(function (c) { return Fin.I.has(c.icon); }) &&
+                    Fin.C.INCOME_CATEGORIES.every(function (c) { return Fin.I.has(c.icon); });
+       var locOk = Fin.C.LOCATIONS.every(function (l) { return Fin.I.has(l.icon); });
+       var navOk = Fin.C.NAV.every(function (n) { return Fin.I.has(n.icon); });
+       var svg = Fin.I.svg('wallet');
+       return {
+         ok: true, count: names.length, catsOk: catsOk, locOk: locOk, navOk: navOk,
+         isSvg: svg.indexOf('<svg') === 0 && svg.indexOf('stroke="currentColor"') > 0,
+         hasDir: Fin.I.has('arrowUp') && Fin.I.has('arrowDown'),
+         dirIncome: Fin.I.direction('income').name, dirExpense: Fin.I.direction('expense').name
+       };
+     })()`,
+    ctx2
+  );
+  check('نظام الأيقونات Fin.I موجود', iconCheck.ok, iconCheck.ok, true);
+  check('كل أيقونات فئات المصروفات والإيرادات معرّفة', iconCheck.catsOk, iconCheck.catsOk, true);
+  check('كل أيقونات الأماكن معرّفة', iconCheck.locOk, iconCheck.locOk, true);
+  check('كل أيقونات التبويبات معرّفة', iconCheck.navOk, iconCheck.navOk, true);
+  check('الأيقونة تُصدَّر SVG بخط currentColor', iconCheck.isSvg, iconCheck.isSvg, true);
+  check('أيقونات الاتجاه (صعود/هبوط) موجودة', iconCheck.hasDir, iconCheck.hasDir, true);
+  eq('اتجاه الدخل = صعود', iconCheck.dirIncome, 'arrowUp');
+  eq('اتجاه المصروف = هبوط', iconCheck.dirExpense, 'arrowDown');
+  check('عدد الأيقونات المتاحة ≥ 70', iconCheck.count >= 70, iconCheck.count, '>= 70');
 }
 
 /* ================================================ ملاحظات العقد (غير محسوبة) */

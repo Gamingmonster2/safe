@@ -95,7 +95,7 @@
       currentView.render(App.container, ctx);
     } catch (e) {
       console.error('[app] فشل رسم الشاشة ' + id, e);
-      App.container.appendChild(UI.emptyState('💥', 'خطأ في الشاشة', String(e && e.message || e)));
+      App.container.appendChild(UI.emptyState('alert', 'خطأ في الشاشة', String(e && e.message || e)));
     }
     window.scrollTo({ top: 0, behavior: 'auto' });
     App.renderNav();
@@ -109,7 +109,7 @@
       currentView.render(App.container, ctx);
     } catch (e) {
       console.error('[app] فشل تحديث الشاشة ' + currentId, e);
-      App.container.appendChild(UI.emptyState('💥', 'خطأ في الشاشة', String(e && e.message || e)));
+      App.container.appendChild(UI.emptyState('alert', 'خطأ في الشاشة', String(e && e.message || e)));
     }
     App.renderNav();
     App.renderHeader();
@@ -125,16 +125,16 @@
       var v = views[id];
       if (!v || v.hidden) return;
       var cls = 'nav-item' + (id === currentId ? ' is-active' : '');
-      nav.appendChild(U.el('a', {
+      var link = U.el('a', {
         class: cls,
         href: '#/' + id,
         title: v.title || id,
         onClick: function (e) { e.preventDefault(); App.go(id); },
         'aria-current': id === currentId ? 'page' : null
-      }, [
-        U.el('span', { class: 'nav-ico', text: v.icon || '•' }),
-        U.el('span', { class: 'nav-label', text: (v.title || id).split(' ')[0] })
-      ]));
+      });
+      if (Fin.I) link.appendChild(Fin.I.el(Fin.I.has(v.icon) ? v.icon : 'list', { size: 22, className: 'nav-ico' }));
+      link.appendChild(U.el('span', { class: 'nav-label', text: (v.title || id).split(' ')[0] }));
+      nav.appendChild(link);
     });
   };
 
@@ -149,19 +149,22 @@
     // شارة الرأس: أولوية للنطاقات التي ستسقط، ثم الإيجارات غير المحصَّلة
     var badge = document.getElementById('nav-badge');
     var badgeBtn = document.getElementById('nav-badge-btn');
+    var badgeIco = document.getElementById('nav-badge-ico');
     if (badge && badgeBtn) {
       var dom = Fin.Finance.domainStats(Store.state, U.todayISO());
       var rec = Fin.Finance.receivables(Store.state, U.todayISO());
-      if (dom.criticalCount > 0) {
-        badge.textContent = String(dom.criticalCount);
+      var urgent = dom.criticalCount > 0;
+      var show = urgent || rec.total > 0;
+      if (badgeIco && Fin.I) {
+        U.clear(badgeIco);
+        badgeIco.appendChild(Fin.I.el(urgent ? 'flame' : 'hourglass', { size: 21, tone: urgent ? 'loss' : null }));
+      }
+      if (show) {
+        badge.textContent = urgent ? String(dom.criticalCount) : U.fmtCompact(rec.total);
         badge.classList.remove('hidden');
-        badgeBtn.title = dom.criticalCount + ' نطاق يحتاج تجديداً فورياً — اضغط للذهاب إلى النطاقات';
-        badgeBtn.firstChild && (badgeBtn.firstChild.textContent = '🔥');
-      } else if (rec.total > 0) {
-        badge.textContent = U.fmtCompact(rec.total);
-        badge.classList.remove('hidden');
-        badgeBtn.title = 'مستحق لي ولم يُحصَّل: ' + U.fmtMoney(rec.total) + ' — اضغط للذهاب إلى الإيرادات';
-        badgeBtn.firstChild && (badgeBtn.firstChild.textContent = '⏳');
+        badgeBtn.title = urgent
+          ? (dom.criticalCount + ' نطاق يحتاج تجديداً فورياً — اضغط للذهاب إلى النطاقات')
+          : ('مستحق لي ولم يُحصَّل: ' + U.fmtMoney(rec.total) + ' — اضغط للذهاب إلى الإيرادات');
       } else {
         badge.classList.add('hidden');
       }
@@ -203,16 +206,23 @@
     if (linksHost && C.HEADER_LINKS) {
       U.clear(linksHost);
       C.HEADER_LINKS.forEach(function (l) {
-        linksHost.appendChild(U.el('a', {
+        var link = U.el('a', {
           class: 'header-btn',
           href: '#/' + l.id,
           title: l.title,
           'aria-label': l.title,
-          text: l.icon,
           onClick: function (e) { e.preventDefault(); App.go(l.id); }
-        }));
+        });
+        if (Fin.I) link.appendChild(Fin.I.el(Fin.I.has(l.icon) ? l.icon : 'robot', { size: 21 }));
+        linksHost.appendChild(link);
       });
     }
+
+    // أيقونات أزرار الرأس الثابتة
+    [['quick-add-ico', 'plus'], ['settings-ico', 'settings'], ['nav-badge-ico', 'hourglass']].forEach(function (pair) {
+      var host = document.getElementById(pair[0]);
+      if (host && Fin.I) { U.clear(host); host.appendChild(Fin.I.el(pair[1], { size: 21 })); }
+    });
 
     ctx = {
       state: Store.state,

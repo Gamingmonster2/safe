@@ -758,7 +758,7 @@
     var txs = F.txInRange(st, r.from, r.to, { locationId: loc.id });
     var income = U.sum(txs.filter(function (t) { return t.type === 'income' && F.affectsBalance(t); }), function (t) { return Number(t.amount) || 0; });
     var expense = U.sum(txs.filter(function (t) { return t.type === 'expense' && F.affectsBalance(t); }), function (t) { return Number(t.amount) || 0; });
-    var out = [(loc.icon || '📍') + ' ' + loc.name + ' — ' + r.label];
+    var out = [loc.name + ' — ' + r.label];
     if (!txs.length) {
       out.push('• ما فيه حركات مسجّلة على هذا المكان في هذه الفترة.');
     } else {
@@ -782,7 +782,7 @@
       out.push('ما فيه حركات مسجلة في هذه الفترة.');
     } else {
       txs.slice(0, 8).forEach(function (t) {
-        var sign = t.type === 'income' ? '+' : (t.type === 'expense' ? '−' : '↔');
+        var sign = t.type === 'income' ? '+' : (t.type === 'expense' ? '−' : '=');
         out.push('• ' + U.dateLabel(t.date, 'short') + ' — ' + txLabel(t) + ': ' + sign + U.fmtMoney(t.amount, { currency: false }) + ' د.ل' +
           (t.paid === false ? ' (لم يُسدَّد)' : '') + (t.planned ? ' (مخطّط)' : ''));
       });
@@ -1319,9 +1319,9 @@
     var enabled = Agent.isEnabled();
     mounted.status.textContent = enabled ? ('المفتاح متصل · ' + modelName()) : 'بدون مفتاح — محرّك محلي';
     mounted.status.className = 'badge ' + (enabled ? 'badge-success' : 'badge-warn');
-    mounted.voiceBtn.textContent = voiceOn() ? '🔊' : '🔇';
-    mounted.voiceBtn.title = voiceOn() ? 'الصوت مفعّل — اضغط للكتم' : 'الصوت مكتوم — اضغط للتفعيل';
+    setIcon(mounted.voiceBtn, voiceOn() ? 'volume' : 'volumeOff');
     mounted.voiceBtn.setAttribute('aria-pressed', voiceOn() ? 'true' : 'false');
+    mounted.voiceBtn.title = voiceOn() ? 'الصوت مفعّل — اضغط للكتم' : 'الصوت مكتوم — اضغط للتفعيل';
 
     var banner = mounted.banner;
     U.clear(banner);
@@ -1329,7 +1329,7 @@
       banner.style.display = 'none';
     } else {
       banner.style.display = '';
-      banner.appendChild(U.el('div', { class: 'alert-ico', text: '🔑' }));
+      banner.appendChild(U.el('div', { class: 'alert-ico' }, [icoSpan('key')]));
       banner.appendChild(U.el('div', { class: 'alert-main' }, [
         U.el('div', { class: 'alert-title', text: 'المساعد الذكي غير مفعّل' }),
         U.el('div', { class: 'alert-body', text: 'أضف مفتاح DeepSeek من الإعدادات ليعمل التحليل الذكي والصوت. بدون مفتاح يعمل المحرّك المحلي كامل بلا إنترنت.' })
@@ -1342,19 +1342,31 @@
     return mounted.status;
   };
 
+  /* ---- أيقونات SVG داخل واجهة المساعد (بديل الإيموجي) ---- */
+  function icoSpan(name, size) {
+    var I = Fin.I;
+    if (!I) return U.el('span', { class: 'ic-wrap' });
+    return I.el(I.has(name) ? name : 'info', { size: size || 18 });
+  }
+  function setIcon(host, name, size) {
+    if (!host) return;
+    U.clear(host);
+    host.appendChild(icoSpan(name, size));
+  }
+
   Agent.mount = function (container) {
     if (!container || typeof container.appendChild !== 'function') return null;
     U.clear(container);
     try { container.setAttribute('dir', 'rtl'); } catch (e) { /* تجاهل */ }
 
     var status = U.el('span', { class: 'badge badge-muted', text: '…' });
-    var testBtn = U.el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: '🔑 اختبار المفتاح', title: 'اختبار مفتاح DeepSeek' });
-    var voiceBtn = U.el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: '🔊', title: 'الصوت', 'aria-pressed': 'true' });
-    var clearBtn = U.el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: '🧹', title: 'مسح المحادثة' });
+    var testBtn = U.el('button', { type: 'button', class: 'btn btn-ghost btn-sm', title: 'اختبار مفتاح DeepSeek' }, [icoSpan('key'), U.el('span', { text: 'اختبار المفتاح' })]);
+    var voiceBtn = U.el('button', { type: 'button', class: 'btn btn-ghost btn-sm', title: 'النطق الصوتي', 'aria-pressed': 'false' }, [icoSpan('volumeOff')]);
+    var clearBtn = U.el('button', { type: 'button', class: 'btn btn-ghost btn-sm', title: 'مسح المحادثة' }, [icoSpan('trash')]);
 
     var head = U.el('div', { class: 'agent-head' }, [
       U.el('div', { class: 'agent-head-title' }, [
-        U.el('span', { class: 'agent-avatar', 'aria-hidden': 'true', text: '🤖' }),
+        U.el('span', { class: 'agent-avatar', 'aria-hidden': 'true' }, [icoSpan('robot')]),
         U.el('span', { class: 'agent-title', text: 'المساعد المالي' })
       ]),
       status,
@@ -1379,7 +1391,7 @@
       'aria-label': 'سؤال للمساعد'
     });
     var sendBtn = U.el('button', { type: 'button', class: 'btn btn-primary agent-send', text: 'إرسال' });
-    var micBtn = Agent.hasVoice() ? U.el('button', { type: 'button', class: 'btn btn-ghost agent-mic', text: '🎤', title: 'إدخال صوتي (ar-LY)' }) : null;
+    var micBtn = Agent.hasVoice() ? U.el('button', { type: 'button', class: 'btn btn-ghost agent-mic', title: 'إدخال صوتي', title: 'إدخال صوتي (ar-LY)' }) : null;
 
     var row = U.el('div', { class: 'agent-input-row' }, [micBtn, input, sendBtn]);
     var shell = U.el('div', { class: 'agent-shell' }, [head, banner, msgs, suggest, row]);
@@ -1387,6 +1399,11 @@
     container.appendChild(shell);
 
     mounted = { host: container, shell: shell, msgs: msgs, input: input, status: status, banner: banner, voiceBtn: voiceBtn, micBtn: micBtn, testBtn: testBtn };
+
+    // أيقونة حالة النطق تُضبط الآن (syncStatus يُنادى لاحقاً عند كل تغيير)
+    setIcon(voiceBtn, voiceOn() ? 'volume' : 'volumeOff');
+    voiceBtn.setAttribute('aria-pressed', voiceOn() ? 'true' : 'false');
+    voiceBtn.title = voiceOn() ? 'الصوت مفعّل — اضغط للكتم' : 'الصوت مكتوم — اضغط للتفعيل';
 
     /* ---- الأحداث ---- */
 
@@ -1414,7 +1431,7 @@
     testBtn.addEventListener('click', function () {
       testBtn.disabled = true;
       var old = testBtn.textContent;
-      testBtn.textContent = '⏳ يختبر…';
+      testBtn.textContent = 'يختبر…';
       Agent._busy = true;
       Agent.renderMessages();
       Agent.testKey().then(function (result) {

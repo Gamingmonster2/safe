@@ -10,15 +10,25 @@
   var C = Fin.C, U = Fin.U, UI = Fin.UI, Store = Fin.Store, F = Fin.Finance;
   Fin.Views = Fin.Views || {};
 
+  /* أيقونة SVG احترافية من icons.js (بديل الإيموجي) */
+  function icon(name, opts) {
+    opts = opts || {};
+    if (!Fin.I) return U.el('span', { class: 'ic-wrap' });
+    var key = (name && Fin.I.has(name)) ? name : (opts.fallback || 'package');
+    return Fin.I.el(key, { size: opts.size || 20, tone: opts.tone || null });
+  }
+
   function saveSettings(patch) { Store.updateSettings(patch); }
 
   /* --------------------------------------------------------- المظهر */
 
   function appearanceSection(state) {
     var current = state.settings.theme || 'dark';
-    var labels = { dark: '🌙 ليلي', light: '☀️ نهاري', auto: '🖥️ تلقائي (حسب الجهاز)' };
+    var labels = { dark: 'ليلي', light: 'نهاري', auto: 'تلقائي (حسب الجهاز)' };
+    var icons = { dark: 'moon', light: 'sun', auto: 'sliders' };
     var chips = U.el('div', { class: 'tabs' }, C.THEMES.map(function (t) {
       return UI.chip(labels[t], {
+        icon: icons[t],
         active: t === current,
         onClick: function () {
           saveSettings({ theme: t });
@@ -54,7 +64,7 @@
         hint: 'مُطفأ افتراضياً لأن التطبيق منظومة تسجيل. فعّله فقط إذا أردت أن يقرأ المساعد ردوده بصوت عالٍ.'
       },
       {
-        name: 'voiceInput', label: 'زر الإدخال الصوتي 🎤 في شاشة المساعد',
+        name: 'voiceInput', label: 'زر الإدخال الصوتي في شاشة المساعد',
         type: 'checkbox',
         hint: 'يتيح لك التكلّم بدل الكتابة (يحتاج دعم المتصفح). لا يُشغّل أي صوت.'
       }
@@ -68,7 +78,7 @@
     });
 
     var status = U.el('div', { class: 'alert alert-' + (hasKey ? 'info' : 'warn') }, [
-      U.el('div', { class: 'alert-ico', text: hasKey ? '✅' : '🔑' }),
+      U.el('div', { class: 'alert-ico' }, [icon(hasKey ? 'checkCircle' : 'key', { size: 14 })]),
       U.el('div', { class: 'alert-main' }, [
         U.el('div', { class: 'alert-title', text: hasKey ? 'المفتاح محفوظ ومفعّل' : 'لم تُضف مفتاحاً بعد' }),
         U.el('div', { class: 'alert-body', text: hasKey ? 'المساعد يجيب من DeepSeek مع أدوات تحليل بياناتك. وبدون إنترنت يعمل المحرّك المحلي، والتطبيق كله يعمل أوفلاين.' : 'بدون مفتاح يعمل المحرّك المحلي فقط (أرقامك وملخصاتك بلا إنترنت). المفتاح يضيف التحليل الذكي فقط — ولا علاقة له بالصوت.' })
@@ -77,6 +87,7 @@
 
     var actions = U.el('div', { class: 'btn-row' }, [
       UI.btn('حفظ المفتاح والإعدادات', {
+        icon: 'check',
         tone: 'primary',
         onClick: function () {
           var v = form.getValues();
@@ -96,14 +107,14 @@
           if (!Fin.Agent || !Fin.Agent.testKey) { UI.toast('وحدة الوكيل غير محمّلة', 'danger'); return; }
           UI.toast('جارٍ الاختبار…', 'info');
           Fin.Agent.testKey(key, v.model).then(function (res) {
-            UI.toast(res.ok ? 'المفتاح يعمل ✅' : 'فشل: ' + res.error, res.ok ? 'success' : 'danger', 5000);
+            UI.toast(res.ok ? 'المفتاح يعمل' : 'فشل: ' + res.error, res.ok ? 'success' : 'danger', 5000);
           });
         }
       }),
-      UI.btn('فتح المساعد', { tone: 'ghost', onClick: function () { if (Fin.App) Fin.App.go('agent'); } })
+      UI.btn('فتح المساعد', { icon: 'robot', tone: 'ghost', onClick: function () { if (Fin.App) Fin.App.go('agent'); } })
     ]);
 
-    var voiceNote = UI.kv('دعم إدخال الصوت في هذا المتصفح', (Fin.Agent && Fin.Agent.hasVoice && Fin.Agent.hasVoice()) ? 'مدعوم ✅' : 'غير مدعوم في هذا المتصفح');
+    var voiceNote = UI.kv('دعم إدخال الصوت في هذا المتصفح', (Fin.Agent && Fin.Agent.hasVoice && Fin.Agent.hasVoice()) ? 'مدعوم' : 'غير مدعوم في هذا المتصفح');
     var voiceState = UI.kv('حالة النطق الصوتي', agent.voice === true ? 'مفعّل (يقرأ الردود)' : 'مُطفأ — لن تسمع أي صوت');
 
     return UI.section('المساعد الذكي (اختياري)', [
@@ -148,15 +159,17 @@
         ])
       ]),
       U.el('div', { class: 'btn-row' }, [
-        UI.btn('⬇️ تصدير نسخة (JSON)', {
+        UI.btn('تصدير نسخة (JSON)', {
+          icon: 'download',
           tone: 'primary',
           onClick: function () {
             U.download('masrofi-backup-' + U.todayISO() + '.json', Store.exportJSON(), 'application/json;charset=utf-8');
             UI.toast('نُزّلت النسخة الاحتياطية', 'success');
           }
         }),
-        UI.btn('⬆️ استيراد نسخة', { tone: 'ghost', onClick: function () { importInput.click(); } }),
-        UI.btn('📄 تصدير Excel/CSV', {
+        UI.btn('استيراد نسخة', { icon: 'upload', tone: 'ghost', onClick: function () { importInput.click(); } }),
+        UI.btn('تصدير Excel/CSV', {
+          icon: 'file',
           tone: 'ghost',
           onClick: function () {
             U.download('masrofi-' + U.todayISO() + '.csv', Store.exportCSV(), 'text/csv;charset=utf-8');
@@ -180,6 +193,7 @@
       form.el,
       U.el('div', { class: 'btn-row' }, [
         UI.btn('حفظ الدومين', {
+          icon: 'check',
           tone: 'primary',
           onClick: function () {
             var v = form.getValues();
@@ -188,6 +202,7 @@
           }
         }),
         UI.btn('نسخ خطوات الرفع على GitHub', {
+          icon: 'file',
           tone: 'ghost',
           onClick: function () {
             var text = [
@@ -213,6 +228,7 @@
     return UI.section('منطقة الخطر', [
       U.el('div', { class: 'btn-row' }, [
         UI.btn('إعادة تعيين إلى بيانات 5 أكتوبر', {
+          icon: 'refresh',
           tone: 'ghost',
           onClick: function () {
             UI.confirm('سيُستبدل كل شيء ببيانات البذرة (حركات 5 أكتوبر 2026). متابعة؟', { okLabel: 'إعادة تعيين', tone: 'danger' }).then(function (ok) {
@@ -224,6 +240,7 @@
           }
         }),
         UI.btn('مسح كل الحركات (إبقاء الحسابات)', {
+          icon: 'trash',
           tone: 'danger',
           onClick: function () {
             UI.confirm('سيُمسح كل السجل: الحركات والاستحقاقات والسندات. الحسابات والقوالب تبقى. متابعة؟', { okLabel: 'امسح', tone: 'danger' }).then(function (ok) {
@@ -244,7 +261,7 @@
   Fin.Views.settings = {
     id: 'settings',
     title: 'الإعدادات',
-    icon: '⚙️',
+    icon: 'settings',
     order: 7,
 
     render: function (rootEl, ctx) {
@@ -253,7 +270,7 @@
       rootEl.appendChild(UI.section('عن التطبيق', [
         U.el('div', { class: 'card' }, [
           U.el('div', { class: 'card-head' }, [
-            U.el('span', { class: 'ico', text: '💼' }),
+            icon('wallet', { size: 20 }),
             U.el('div', { class: 'card-title', text: C.APP_NAME + ' — الإصدار ' + C.VERSION }),
             U.el('div', { class: 'card-extra' }, [UI.badge('د.ل LYD', 'info')])
           ]),
@@ -276,7 +293,7 @@
       rootEl.appendChild(UI.section('اختصارات', [
         U.el('div', { class: 'card' }, [
           U.el('div', { class: 'card-body' }, [
-            UI.kv('إضافة مصروف سريع', 'اضغط ＋ في الأعلى أو حرف  n'),
+            UI.kv('إضافة مصروف سريع', 'اضغط زر الإضافة في الأعلى أو حرف  n'),
             UI.kv('تبديل الوضع الليلي', 'حرف  t'),
             UI.kv('الرئيسية', 'حرف  Esc ثم اختر من الشريط')
           ])

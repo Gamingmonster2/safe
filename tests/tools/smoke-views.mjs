@@ -30,6 +30,7 @@ globalThis.window = globalThis;
 
 const FILES = [
   'assets/js/constants.js',
+  'assets/js/icons.js',
   'assets/js/util.js',
   // store.js يلتقط Fin.Finance عند التحميل (import-less)، لذا finance.js قبله
   'assets/js/finance.js',
@@ -176,11 +177,12 @@ eq('القوالب خمسة', state.templates.length, 5);
 /* ------------------------------------------------------ الشاشات الأربع */
 
 section('6) تسجيل الشاشات وعقد Fin.Views');
+// الهوية الجديدة: الأيقونة اسم من Fin.I (لا إيموجي)
 const expectedViews = {
-  expenses: { order: 2, title: 'المصروفات', icon: '💸' },
-  income: { order: 3, title: 'الإيرادات', icon: '💰' },
-  accounts: { order: 4, title: 'الحسابات', icon: '🏦' },
-  reports: { order: 5, title: 'التقارير', icon: '📊' }
+  expenses: { order: 2, title: 'المصروفات', icon: 'receipt' },
+  income: { order: 3, title: 'الإيرادات', icon: 'wallet' },
+  accounts: { order: 4, title: 'الحسابات', icon: 'bank' },
+  reports: { order: 5, title: 'التقارير', icon: 'chart' }
 };
 for (const [id, meta] of Object.entries(expectedViews)) {
   const v = Fin.Views && Fin.Views[id];
@@ -191,6 +193,7 @@ for (const [id, meta] of Object.entries(expectedViews)) {
   eq('  ' + id + '.id', v.id, id);
   eq('  ' + id + '.title', v.title, meta.title);
   eq('  ' + id + '.icon', v.icon, meta.icon);
+  ok('  ' + id + '.icon أيقونة معروفة في Fin.I', !!(Fin.I && Fin.I.has(v.icon)), String(v.icon));
   eq('  ' + id + '.order', v.order, meta.order);
 }
 
@@ -250,16 +253,27 @@ section('9) سلامة ملفات الشاشات (ترميز UTF-8 + أصناف 
     ok(f + '.js يستعمل U.el', /U\.el\(/.test(src));
   }
   const css = readFileSync(join(ROOT, 'assets/css/app.css'), 'utf8');
+  ok('app.css غير فارغ (' + css.length + ' حرف)', css.length > 5000);
   const need = ['app-shell', 'nav', 'nav-item', 'view', 'section-head', 'card', 'stat-grid',
     'tx-row', 'badge', 'chip', 'tabs', 'tab', 'btn', 'input', 'switch-track', 'progress-bar',
     'hbar-fill', 'modal-overlay', 'toast', 'alert', 'empty', 'kv', 'legend', 'svg-chart',
     'svg-donut', 'charge-row', 'quick-grid', 'quick-btn', 'range-row', 'summary-strip',
     'divider', 'agent-shell', 'agent-msg', 'agent-input-row', 'typing', 'skip-link',
     'boot-spinner', 'nav-badge-host', '@media print', 'prefers-reduced-motion'];
-  const missing = need.filter(c => !css.includes(c));
-  ok('app.css يحوي كل الأصناف المطلوبة (' + need.length + ')', missing.length === 0, missing.join(', '));
+  // الأصناف قد تكون في app.css أو theme.css (الهوية والألوان)
+  const themeCss = readFileSync(join(ROOT, 'assets/css/theme.css'), 'utf8');
+  const allCss = css + '\n' + themeCss;
+  const missing = need.filter((c) => !allCss.includes(c));
+  ok('app.css + theme.css يحويان كل الأصناف المطلوبة (' + need.length + ')', missing.length === 0, missing.join(', '));
+  // الألوان كلها من theme.css. المسموح هنا فقط: #fff (نص فوق الأزرق) و#ccc (حدود الطباعة).
   const hex = (css.match(/#[0-9a-fA-F]{3,8}\b/g) || []);
-  ok('app.css بلا ألوان hex ثابتة', hex.length === 0, hex.join(', '));
+  const hexBad = hex.filter(h => !['#fff', '#ffffff', '#ccc'].includes(h.toLowerCase()));
+  ok('app.css بلا ألوان hex ثابتة (عدا نص الأزرار والطباعة)', hexBad.length === 0, hexBad.join(', '));
+  // الهوية الجديدة: لا إيموجي في CSS أو الشاشات
+  const picTo = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u;
+  ok('app.css بلا إيموجي', !picTo.test(css));
+  ok('app.css يعرّف شارة الاتجاه .dir-badge', css.includes('dir-badge') && css.includes('.amount-block'));
+  ok('app.css يعرّف أيقونات SVG (.ic/.ic-wrap)', css.includes('.ic-wrap') || css.includes('.ic {'));
   const braces = (css.match(/\{/g) || []).length === (css.match(/\}/g) || []).length;
   ok('app.css أقواس متوازنة', braces);
   void fs;

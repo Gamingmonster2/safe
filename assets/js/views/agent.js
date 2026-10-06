@@ -13,10 +13,27 @@
 
   function agent() { return Fin.Agent || null; }
 
+  /* أيقونة SVG احترافية من icons.js (بديل الإيموجي) */
+  function icon(name, opts) {
+    opts = opts || {};
+    if (!Fin.I) return U.el('span', { class: 'ic-wrap' });
+    var key = (name && Fin.I.has(name)) ? name : (opts.fallback || 'package');
+    return Fin.I.el(key, { size: opts.size || 20, tone: opts.tone || null });
+  }
+
+  /* حالة فراغ بأيقونة SVG (بنفس بنية UI.emptyState) */
+  function emptyBox(name, title, body) {
+    return U.el('div', { class: 'empty' }, [
+      U.el('div', { class: 'empty-ico' }, [icon(name, { size: 36 })]),
+      U.el('div', { class: 'empty-title', text: title || 'لا يوجد شيء بعد' }),
+      body ? U.el('div', { class: 'empty-body', text: body }) : null
+    ]);
+  }
+
   Fin.Views.agent = {
     id: 'agent',
     title: 'المساعد',
-    icon: '🤖',
+    icon: 'robot',
     order: 6,
     subtitle: 'اسأل عن أموالك بالكتابة أو الصوت',
 
@@ -24,8 +41,8 @@
       var A = agent();
 
       if (!A || typeof A.mount !== 'function') {
-        rootEl.appendChild(UI.emptyState(
-          '🤖',
+        rootEl.appendChild(emptyBox(
+          'robot',
           'وحدة المساعد غير محمّلة',
           'لم يتم تحميل assets/js/agent.js. تحقق من وجود الملف وترتيب السكربتات في index.html ثم أعد التحميل.'
         ));
@@ -39,7 +56,7 @@
       } catch (e) {
         console.error('[agent view] فشل تركيب الواجهة', e);
         U.clear(host);
-        host.appendChild(UI.emptyState('💥', 'تعذّر تشغيل المساعد', String(e && e.message || e)));
+        host.appendChild(emptyBox('alert', 'تعذّر تشغيل المساعد', String(e && e.message || e)));
       }
     },
 

@@ -77,7 +77,7 @@
       createdAt: C.TODAY + 'T12:00:00' + C.TZ_OFFSET,
       seededAt: new Date().toISOString(),
       settings: {
-        theme: 'dark',
+        theme: 'light',
         currency: C.CURRENCY,
         locale: C.LOCALE,
         domain: '',
@@ -265,7 +265,7 @@
   S.migrate = function (data) {
     var st = data || {};
     st.version = C.SCHEMA_VERSION;
-    st.settings = Object.assign({ theme: 'dark', currency: C.CURRENCY, locale: C.LOCALE, domain: '' }, st.settings || {});
+    st.settings = Object.assign({ theme: 'light', currency: C.CURRENCY, locale: C.LOCALE, domain: '' }, st.settings || {});
     st.settings.agent = Object.assign({ provider: 'deepseek', model: 'deepseek-chat', apiKey: '', voice: false }, st.settings.agent || {});
     st.accounts = (st.accounts && st.accounts.length) ? st.accounts : U.deepClone(C.ACCOUNTS);
     st.locations = (st.locations && st.locations.length) ? st.locations : U.deepClone(C.LOCATIONS);

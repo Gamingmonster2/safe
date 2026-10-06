@@ -29,12 +29,13 @@ const ROOT = resolve(HERE, '..');
 const OUT_DIR = join(ROOT, 'assets', 'img');
 
 /* ------------------------------------------------------------------- ألوان */
-const BLUE = '#2f6df6';   // أساسي التطبيق (بداية التدرّج)
-const DEEP = '#0b1020';   // خلفية التطبيق الليلية (نهاية التدرّج)
+/* هوية «مصروفي» الجديدة على نمط PayPal: أزرق مفرح على أبيض */
+const BLUE = '#0070ba';   // بداية التدرّج (PayPal blue)
+const DEEP = '#003e7a';   // نهاية التدرّج (أزرق عميق)
 const INK = '#ffffff';
-const PANEL = '#dbe4fb';
-const GOLD = '#f59e0b';
-const GOLD_DARK = '#b45309';
+const PANEL = '#ffffff';  // اللوح الأبيض
+const GOLD = '#ffb700';   // العملة (ذهبي مفرح)
+const GOLD_DARK = '#d97706';
 
 /* =============================================================== CRC32 ===== */
 const CRC_TABLE = (() => {
@@ -182,7 +183,7 @@ const STYLES = {
 };
 
 /**
- * يرسم أيقونة «مصروفي»: تدرّج #2f6df6 ← #0b1020 + محفظة وفيها دينار ذهبي.
+ * يرسم أيقونة «مصروفي»: تدرّج #0070ba ← #003e7a (أزرق PayPal) + محفظة بيضاء وفيها دينار ذهبي.
  * @returns {Uint8Array} RGBA بطول size*size*4
  */
 function renderIcon(size, styleName) {

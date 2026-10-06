@@ -83,7 +83,7 @@ class DomNode {
   querySelectorAll(sel) { return findAll(this, sel); }
   focus() { this.focused = true; }
   remove() { if (this.parentNode) this.parentNode.removeChild(this); }
-  // حرس: agent.js ممنوع يستخدم innerHTML لمحتوى المستخدم
+  // نمط الفحص: agent.js ممنوع يستخدم innerHTML (نرحّب ببناء العناصر بـ createElement)
   set innerHTML(v) { throw new Error('agent.js استخدم innerHTML — ممنوع (' + String(v).slice(0, 40) + ')'); }
   get innerHTML() { return ''; }
 }
@@ -138,6 +138,7 @@ globalThis.document = {
   body: new DomNode('body'),
   documentElement: new DomNode('html'),
   createElement: (t) => new DomNode(t),
+  createElementNS: (ns, t) => new DomNode(t),
   createTextNode: (t) => { const n = new DomNode('#text'); n.nodeType = 3; n.textContent = String(t); return n; },
   getElementById: () => null,
   querySelector: () => null,
@@ -155,7 +156,7 @@ function loadModule(file) {
   // eslint-disable-next-line no-new-func
   new Function(code).call(globalThis);
 }
-for (const f of ['constants.js', 'util.js', 'finance.js', 'store.js', 'ui.js', 'agent.js']) loadModule(f);
+for (const f of ['constants.js', 'icons.js', 'util.js', 'finance.js', 'store.js', 'ui.js', 'agent.js']) loadModule(f);
 
 const Fin = globalThis.Fin;
 const Store = Fin.Store, F = Fin.Finance, U = Fin.U, C = Fin.C, Agent = Fin.Agent;
@@ -606,8 +607,25 @@ check('6 أزرار اقتراحات', byClass(box, 'agent-suggest') && byClass(
 const headButtons = findAll(byClass(box, 'agent-actions'), 'button');
 eq('رأس فيه 3 أزرار (اختبار المفتاح/الصوت/المسح)', headButtons.length, 3);
 has('زر اختبار المفتاح موجود', textOf(headButtons[0]), 'اختبار المفتاح');
-// النطق مُطفأ افتراضياً (منظومة تسجيل لا منظومة صوت) → الأيقونة 🔇
-has('زر الصوت موجود ومُطفأ افتراضياً', textOf(headButtons[1]), '🔇');
+// النطق مُطفأ افتراضياً (منظومة تسجيل لا منظومة صوت) → أيقونة SVG حقيقية (volumeOff)
+function hasSvgNode(node) {
+  if (!node) return false;
+  if (String(node.tagName || '').toLowerCase() === 'svg') return true;
+  return (node.childNodes || []).some(hasSvgNode);
+}
+function svgClasses(node, out) {
+  out = out || [];
+  if (!node) return out;
+  if (String(node.tagName || '').toLowerCase() === 'svg') out.push(String(node.className || ''));
+  (node.childNodes || []).forEach((c) => svgClasses(c, out));
+  return out;
+}
+const voiceSvgs = svgClasses(headButtons[1], []);
+check('زر الصوت فيه أيقونة SVG (بلا إيموجي)', hasSvgNode(headButtons[1]) && String(textOf(headButtons[1])).trim() === '', JSON.stringify(voiceSvgs));
+check('أيقونة الصوت تعكس حالة الإطفاء (volumeOff)', voiceSvgs.some((c) => c.indexOf('ic-volumeOff') >= 0), JSON.stringify(voiceSvgs));
+check('زر الصوت عليه aria-pressed=false', headButtons[1].getAttribute('aria-pressed') === 'false', headButtons[1].getAttribute('aria-pressed'));
+check('أيقونة زر اختبار المفتاح SVG', hasSvgNode(headButtons[0]), String(textOf(headButtons[0])).slice(0, 40));
+check('أيقونة زر المسح SVG', hasSvgNode(headButtons[2]) && String(textOf(headButtons[2])).trim() === '', String(textOf(headButtons[2])));
 check('النطق معطّل افتراضياً في الإعدادات', Agent.voiceEnabled() === false);
 check('silence() متاحة لإيقاف أي نطق', typeof Agent.silence === 'function');
 check('حقل الإدخال موجود', !!byClass(box, 'agent-field'));

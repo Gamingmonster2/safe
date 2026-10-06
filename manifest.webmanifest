@@ -10,8 +10,8 @@
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
-  "background_color": "#0b1020",
-  "theme_color": "#0b1020",
+  "background_color": "#ffffff",
+  "theme_color": "#0070ba",
   "categories": ["finance", "productivity"],
   "prefer_related_applications": false,
   "icons": [
@@ -59,6 +59,13 @@
       "short_name": "إيرادات",
       "description": "تحصيل الإيجارات ومتابعة المستحق غير المحصَّل",
       "url": "./#/income",
+      "icons": [{ "src": "./assets/img/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "النطاقات",
+      "short_name": "نطاقات",
+      "description": "تجديدات النطاقات وتذكيراتها",
+      "url": "./#/domains",
       "icons": [{ "src": "./assets/img/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {

@@ -287,7 +287,8 @@ section('3) manifest.webmanifest');
 const MANIFEST_REQUIRED = {
   name: 'مصروفي', short_name: 'مصروفي', lang: 'ar', dir: 'rtl',
   start_url: './', scope: './', display: 'standalone', orientation: 'portrait',
-  background_color: '#0b1020', theme_color: '#0b1020',
+  // الهوية الجديدة (نمط PayPal): شاشة البداية بيضاء وشريط المتصفح أزرق مفرح
+  background_color: '#ffffff', theme_color: '#0070ba',
 };
 let manifest = null;
 if (!existsSync(P('manifest.webmanifest'))) {

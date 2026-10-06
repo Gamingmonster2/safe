@@ -12,7 +12,53 @@
   Fin.UI = UI;
 
   function el(tag, attrs, children) { return U.el(tag, attrs, children); }
-  function iconEl(icon, cls) { return el('span', { class: 'ico ' + (cls || ''), 'aria-hidden': 'true', text: icon || '' }); }
+
+  // أيقونة SVG احترافية بالأيقونة المطلوبة (اسم أو إيموجي قديم → أيقونة مناسبة)
+  function icoNode(name, tone) {
+    var I = Fin.I;
+    if (!I) return el('span', { class: 'ic-wrap', text: '' });
+    var key = I.has(name) ? name : (I.has(String(name || '')) ? name : 'package');
+    if (!I.has(name)) key = 'package';
+    return I.el(key, { size: 22, tone: tone || null });
+  }
+  UI.ico = icoNode;
+  function iconEl(icon, cls) {
+    var node = icoNode(icon);
+    if (cls) node.className += ' ' + cls;
+    return node;
+  }
+  // رمز الفئة المالية (يجمع بين الفئة والنوع)
+  function catIcon(cat, tone) {
+    var I = Fin.I;
+    if (!I) return el('span', { class: 'ic-wrap' });
+    var name = I.forCategory(cat && cat.key, cat && cat.type);
+    return I.el(name, { size: 22, tone: tone || null });
+  }
+  UI.catIcon = catIcon;
+
+  // شارة اتجاه واضحة: ▲ دخل · ▼ مصروف
+  UI.dirBadge = function (isIncome, label) {
+    var I = Fin.I;
+    var node = el('span', { class: 'dir-badge ' + (isIncome ? 'in' : 'out') });
+    if (I) node.appendChild(I.el(isIncome ? 'arrowUp' : 'arrowDown', { size: 14, width: 2.2 }));
+    node.appendChild(el('span', { text: label || (isIncome ? 'دخل' : 'مصروف') }));
+    return node;
+  };
+
+  // عنصر مبلغ مع سهم الاتجاه
+  UI.amountBlock = function (amount, isIncome, opts) {
+    opts = opts || {};
+    var I = Fin.I;
+    var wrap = el('div', { class: 'amount-block ' + (isIncome ? 'in' : 'out') });
+    if (I && opts.arrow !== false) wrap.appendChild(I.el(isIncome ? 'arrowUp' : 'arrowDown', { size: 18, width: 2.2 }));
+    wrap.appendChild(el('span', {
+      class: 'amount-value ' + (isIncome ? 'amount-in' : 'amount-out'),
+      text: (isIncome ? '+' : '−') + U.fmtMoney(amount, { currency: false })
+    }));
+    if (opts.currency !== false) wrap.appendChild(el('span', { class: 'amount-cur', text: C.CURRENCY_LABEL }));
+    return wrap;
+  };
+
   // إزالة آمنة: تعمل مع DOM كامل ومع بيئات مصغّرة لا توفّر Element.remove
   function detach(node) {
     if (!node) return;
@@ -40,13 +86,16 @@
       document.documentElement.setAttribute('data-theme', resolved);
       document.documentElement.setAttribute('data-theme-mode', mode || UI.theme.get());
       var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute('content', resolved === 'light' ? '#f4f6fb' : '#0b1020');
+      if (meta) meta.setAttribute('content', resolved === 'light' ? '#ffffff' : '#061428');
       var btn = document.getElementById('theme-toggle');
       if (btn) {
-        btn.textContent = resolved === 'light' ? '🌙' : '☀️';
+        U.clear(btn);
+        if (Fin.I) btn.appendChild(Fin.I.el(resolved === 'light' ? 'moon' : 'sun', { size: 21 }));
         btn.setAttribute('aria-label', resolved === 'light' ? 'الوضع الليلي' : 'الوضع النهاري');
         btn.title = resolved === 'light' ? 'الوضع الليلي' : 'الوضع النهاري';
       }
+      var logo = document.getElementById('app-logo');
+      if (logo && Fin.I) { U.clear(logo); logo.appendChild(Fin.I.el('wallet', { size: 20 })); }
       return resolved;
     },
     set: function (mode) {
@@ -103,12 +152,16 @@
   };
 
   UI.emptyState = function (icon, title, body, action) {
-    return el('div', { class: 'empty' }, [
-      el('div', { class: 'empty-ico', text: icon || '📭' }),
+    var I = Fin.I;
+    var box = el('div', { class: 'empty' }, [
+      el('div', { class: 'empty-ico' }, [
+        I ? I.el(I.has(icon) ? icon : 'package', { size: 34, width: 1.4 }) : null
+      ]),
       el('div', { class: 'empty-title', text: title || 'لا يوجد شيء بعد' }),
       body ? el('div', { class: 'empty-body', text: body }) : null,
       action || null
     ]);
+    return box;
   };
 
   UI.card = function (opts) {
@@ -154,7 +207,7 @@
   UI.list = function (items, opts) {
     opts = opts || {};
     var arr = items || [];
-    if (!arr.length) return opts.empty || UI.emptyState(opts.emptyIcon || '📭', opts.emptyTitle || 'لا يوجد شيء', opts.emptyBody || '');
+    if (!arr.length) return opts.empty || UI.emptyState(opts.emptyIcon || 'package', opts.emptyTitle || 'لا يوجد شيء', opts.emptyBody || '');
     return el('div', { class: 'list' + (opts.className ? ' ' + opts.className : '') },
       arr.map(function (item, i) { return opts.render ? opts.render(item, i) : el('div', { class: 'list-item', text: String(item) }); }));
   };
@@ -183,10 +236,12 @@
     if (tx.chargeId) flags.push(UI.badge('إيجار', 'info'));
 
     var row = el('div', {
-      class: 'tx-row' + (opts.compact ? ' compact' : '') + (tx.paid === false ? ' is-unpaid' : '') + (tx.planned ? ' is-planned' : ''),
+      class: 'tx-row' + (opts.compact ? ' compact' : '') + (tx.paid === false ? ' is-unpaid' : '') + (tx.planned ? ' is-planned' : '') + (isIncome ? ' is-in' : ' is-out'),
       onClick: opts.onClick || null
     }, [
-      el('div', { class: 'tx-ico', style: { background: (cat.color || 'transparent') + '22' }, text: cat.icon }),
+      el('div', { class: 'tx-ico' + (isIncome ? ' in' : ' out') }, [
+        catIcon({ key: tx.category, type: tx.type })
+      ]),
       el('div', { class: 'tx-main' }, [
         el('div', { class: 'tx-title', text: (tx.label || cat.label) }),
         el('div', { class: 'tx-meta' }, [
@@ -196,12 +251,10 @@
         ]),
         flags.length ? el('div', { class: 'tx-flags' }, flags) : null
       ]),
-      el('div', { class: 'tx-amount ' + (isIncome ? 'tx-income' : 'tx-expense') }, [
-        el('span', { text: (isIncome ? '+' : '−') + U.fmtMoney(tx.amount, { currency: false }) })
-      ]),
+      UI.amountBlock(tx.amount, isIncome, { arrow: opts.arrow !== false }),
       (opts.onEdit || opts.onDelete) ? el('div', { class: 'tx-actions' }, [
-        opts.onEdit ? el('button', { type: 'button', class: 'icon-btn', title: 'تعديل', text: '✏️', onClick: function (e) { e.stopPropagation(); opts.onEdit(tx); } }) : null,
-        opts.onDelete ? el('button', { type: 'button', class: 'icon-btn', title: 'حذف', text: '🗑️', onClick: function (e) { e.stopPropagation(); opts.onDelete(tx); } }) : null
+        opts.onEdit ? UI.iconBtn('edit', 'تعديل', function (e) { e.stopPropagation(); opts.onEdit(tx); }) : null,
+        opts.onDelete ? UI.iconBtn('trash', 'حذف', function (e) { e.stopPropagation(); opts.onDelete(tx); }) : null
       ]) : null
     ]);
     return row;
@@ -367,7 +420,7 @@
       var card = el('div', { class: 'modal' + (opts.wide ? ' modal-wide' : '') }, [
         el('div', { class: 'modal-head' }, [
           el('h3', { class: 'modal-title', text: opts.title || '' }),
-          el('button', { type: 'button', class: 'icon-btn', text: '✕', title: 'إغلاق', onClick: function () { close(null); } })
+          UI.iconBtn('close', 'إغلاق', function () { close(null); })
         ]),
         form
       ]);
@@ -388,8 +441,10 @@
       host = el('div', { id: 'toasts', class: 'toasts' });
       document.body.appendChild(host);
     }
-    var node = el('div', { class: 'toast toast-' + (tone || 'info') }, [
-      el('span', { class: 'toast-ico', text: tone === 'danger' ? '⚠️' : tone === 'success' ? '✅' : 'ℹ️' }),
+    var toneName = tone || 'info';
+    var toastIco = toneName === 'danger' ? 'alert' : toneName === 'success' ? 'checkCircle' : 'info';
+    var node = el('div', { class: 'toast toast-' + toneName }, [
+      Fin.I ? Fin.I.el(toastIco, { size: 18 }) : null,
       el('span', { text: message })
     ]);
     host.appendChild(node);
@@ -560,8 +615,12 @@
   };
 
   UI.alertBox = function (alert) {
-    return el('div', { class: 'alert alert-' + (alert.level || 'info') }, [
-      el('div', { class: 'alert-ico', text: alert.icon || 'ℹ️' }),
+    var I = Fin.I;
+    var level = alert.level || 'info';
+    var fallback = level === 'danger' ? 'alert' : level === 'warn' ? 'hourglass' : 'info';
+    var icoName = I && I.has(alert.icon) ? alert.icon : fallback;
+    return el('div', { class: 'alert alert-' + level }, [
+      el('div', { class: 'alert-ico' }, [I ? I.el(icoName, { size: 15, width: 2 }) : null]),
       el('div', { class: 'alert-main' }, [
         el('div', { class: 'alert-title', text: alert.title || '' }),
         alert.body ? el('div', { class: 'alert-body', text: alert.body }) : null
@@ -572,36 +631,40 @@
 
   UI.chargeRow = function (item, opts) {
     opts = opts || {};
-    var loc = C.location(item.locationId);
-    var tone = item.daysLate > 0 ? 'danger' : item.status === 'partial' ? 'warn' : 'info';
-    return el('div', { class: 'charge-row' }, [
+    var I = Fin.I;
+    var tone = item.daysLate > 0 ? 'loss' : item.status === 'partial' ? 'warn' : 'info';
+    return el('div', { class: 'charge-row charge-' + (item.daysLate > 0 ? 'late' : item.status) }, [
+      el('div', { class: 'charge-ico' }, [I ? I.el(I.forLocation(item.locationId), { size: 22, tone: 'brand' }) : null]),
       el('div', { class: 'charge-main' }, [
-        el('div', { class: 'charge-title' }, [
-          iconEl(loc ? loc.icon : '🏠'),
-          el('span', { text: item.label })
-        ]),
+        el('div', { class: 'charge-title', text: item.label }),
         el('div', { class: 'charge-meta', text: item.periodLabel + ' · استحقاق ' + U.dateLabel(item.dueDate, 'short') + (item.daysLate > 0 ? ' · متأخر ' + item.daysLate + ' يوم' : '') })
       ]),
       el('div', { class: 'charge-side' }, [
-        el('div', { class: 'charge-amount', text: U.fmtMoney(item.remaining) }),
+        UI.amountBlock(item.remaining, true, { arrow: false }),
         UI.badge(item.status === 'partial' ? 'جزئي' : 'لم يُحصَّل', tone),
-        opts.onCollect ? el('button', { type: 'button', class: 'btn btn-sm btn-primary', text: 'تحصيل', onClick: function () { opts.onCollect(item); } }) : null
+        opts.onCollect ? UI.btn('تحصيل', { tone: 'primary', size: 'sm', onClick: function () { opts.onCollect(item); } }) : null
       ])
     ]);
   };
 
   UI.iconBtn = function (icon, title, onClick) {
-    return el('button', { type: 'button', class: 'icon-btn', title: title, text: icon, onClick: onClick });
+    var btn = el('button', { type: 'button', class: 'icon-btn', title: title, onClick: onClick });
+    if (Fin.I) btn.appendChild(Fin.I.el(Fin.I.has(icon) ? icon : 'list', { size: 18 }));
+    else btn.textContent = icon;
+    return btn;
   };
 
   UI.btn = function (label, opts) {
     opts = opts || {};
-    return el('button', {
+    var btn = el('button', {
       type: opts.type || 'button',
       class: 'btn btn-' + (opts.tone || 'primary') + (opts.size ? ' btn-' + opts.size : '') + (opts.className ? ' ' + opts.className : ''),
-      text: label,
       onClick: opts.onClick || null,
-      disabled: !!opts.disabled
+      disabled: !!opts.disabled,
+      title: opts.title || null
     });
+    if (opts.icon && Fin.I) btn.appendChild(Fin.I.el(opts.icon, { size: opts.size === 'sm' ? 16 : 18 }));
+    btn.appendChild(el('span', { text: label }));
+    return btn;
   };
 })();

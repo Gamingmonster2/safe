@@ -11,21 +11,39 @@
   var C = Fin.C, U = Fin.U, UI = Fin.UI, Store = Fin.Store, F = Fin.Finance;
   Fin.Views = Fin.Views || {};
 
+  /* أيقونة SVG احترافية من icons.js (بديل الإيموجي) */
+  function icon(name, opts) {
+    opts = opts || {};
+    if (!Fin.I) return U.el('span', { class: 'ic-wrap' });
+    var key = (name && Fin.I.has(name)) ? name : (opts.fallback || 'package');
+    return Fin.I.el(key, { size: opts.size || 20, tone: opts.tone || null });
+  }
+
+  /* حالة فراغ بأيقونة SVG (بنفس بنية UI.emptyState) */
+  function emptyBox(name, title, body) {
+    return U.el('div', { class: 'empty' }, [
+      U.el('div', { class: 'empty-ico' }, [icon(name, { size: 36 })]),
+      U.el('div', { class: 'empty-title', text: title || 'لا يوجد شيء بعد' }),
+      body ? U.el('div', { class: 'empty-body', text: body }) : null
+    ]);
+  }
+
   /* ------------------------------------------------------ أدوات محلية */
 
+  // القوائم المنسدلة تعرض النص فقط — الأيقونة لا تظهر داخل <option>
   function incomeCatOptions() {
-    return C.INCOME_CATEGORIES.map(function (c) { return { value: c.key, label: c.icon + ' ' + c.label }; });
+    return C.INCOME_CATEGORIES.map(function (c) { return { value: c.key, label: c.label }; });
   }
   function accountOptions(state) {
     return (state.accounts || []).map(function (a) { return { value: a.id, label: a.name }; });
   }
   function methodOptions() {
     return C.PAYMENT_METHODS.filter(function (m) { return m.key !== 'credit'; })
-      .map(function (m) { return { value: m.key, label: m.icon + ' ' + m.label }; });
+      .map(function (m) { return { value: m.key, label: m.label }; });
   }
   function locationOptions(state) {
     return [{ value: '', label: '— بلا مكان —' }].concat((state.locations || C.LOCATIONS).map(function (l) {
-      return { value: l.id, label: l.icon + ' ' + l.name };
+      return { value: l.id, label: l.name };
     }));
   }
   function cycleLabel(tpl) {
@@ -130,7 +148,7 @@
       ? UI.list(receipts.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }), {
         render: function (r) {
           return U.el('div', { class: 'list-item' }, [
-            U.el('span', { class: 'ico', text: '🧾' }),
+            U.el('span', { class: 'tx-ico in' }, [icon('receipt', { size: 20 })]),
             U.el('div', { class: 'tx-main' }, [
               U.el('div', { class: 'tx-title', text: U.dateLabel(r.date) }),
               U.el('div', { class: 'tx-meta' }, [
@@ -138,27 +156,21 @@
                 r.note ? U.el('span', { text: ' · ' + r.note }) : null
               ])
             ]),
-            U.el('div', { class: 'tx-amount tx-income', text: U.fmtMoney(r.amount) }),
-            U.el('button', {
-              type: 'button',
-              class: 'icon-btn',
-              title: 'تراجع عن التحصيل',
-              text: '↩️',
-              onClick: function () {
-                if (!Store.unrecordReceipt) { UI.toast('التراجع غير متاح', 'danger'); return; }
-                UI.confirm('التراجع عن سند ' + U.fmtMoney(r.amount) + ' بتاريخ ' + U.dateLabel(r.date, 'short') + '؟ سيُحذف معه سجل الدخل المرتبط.', { title: 'تراجع عن تحصيل' })
-                  .then(function (ok) {
-                    if (!ok) return;
-                    Store.unrecordReceipt(r.id);
-                    UI.toast('تم التراجع عن التحصيل', 'success');
-                    openReceiptsModal(charge, ctx);
-                  });
-              }
+            UI.amountBlock(r.amount, true, { currency: false }),
+            UI.iconBtn('refresh', 'تراجع عن التحصيل', function () {
+              if (!Store.unrecordReceipt) { UI.toast('التراجع غير متاح', 'danger'); return; }
+              UI.confirm('التراجع عن سند ' + U.fmtMoney(r.amount) + ' بتاريخ ' + U.dateLabel(r.date, 'short') + '؟ سيُحذف معه سجل الدخل المرتبط.', { title: 'تراجع عن تحصيل' })
+                .then(function (ok) {
+                  if (!ok) return;
+                  Store.unrecordReceipt(r.id);
+                  UI.toast('تم التراجع عن التحصيل', 'success');
+                  openReceiptsModal(charge, ctx);
+                });
             })
           ]);
         }
       })
-      : UI.emptyState('📭', 'لا سندات بعد', 'لم يُسجَّل أي تحصيل على هذا الاستحقاق.');
+      : emptyBox('receipt', 'لا سندات بعد', 'لم يُسجَّل أي تحصيل على هذا الاستحقاق.');
 
     UI.modal({
       title: 'سندات: ' + charge.label,
@@ -196,7 +208,7 @@
       title: 'تعديل القالب: ' + tpl.label,
       body: U.el('div', {}, [
         U.el('div', { class: 'alert alert-info' }, [
-          U.el('div', { class: 'alert-ico', text: 'ℹ️' }),
+          U.el('div', { class: 'alert-ico' }, [icon('info', { size: 14 })]),
           U.el('div', { class: 'alert-main' }, [
             U.el('div', { class: 'alert-title', text: 'تعديل القالب لا يغيّر الاستحقاقات المُنشأة' }),
             U.el('div', { class: 'alert-body', text: 'يُطبَّق على الاستحقاقات القادمة. لو أردت تغيير استحقاق قائم، عدّل مبلغه من قائمة الاستحقاقات.' })
@@ -317,12 +329,12 @@
     /* ============================ 1) المستحق لي ولم يُحصَّل (أعلى الشاشة) */
     var recCard = U.el('div', { class: 'card card-expense' }, [
       U.el('div', { class: 'card-head' }, [
-        U.el('span', { class: 'ico', text: '⏳' }),
+        icon('hourglass', { size: 20 }),
         U.el('div', { class: 'card-title', text: 'مستحق لي ولم يُحصَّل' }),
         U.el('div', { class: 'card-extra', text: rec.count + ' استحقاق' })
       ]),
       U.el('div', { class: 'card-body' }, [
-        U.el('div', { class: 'card-value', text: U.fmtMoney(rec.total) }),
+        U.el('div', { class: 'card-value tx-warn', text: U.fmtMoney(rec.total) }),
         U.el('div', { class: 'card-sub' }, [
           U.el('span', { text: rec.overdueTotal > 0 ? ('متأخر منها ' + U.fmtMoney(rec.overdueTotal)) : 'لا شيء متأخر — كل الاستحقاقات في موعدها' })
         ])
@@ -336,10 +348,10 @@
     rootEl.appendChild(UI.section('المستحق لي', [
       recCard,
       rec.items.length ? U.el('div', { class: 'list' }, recRows)
-        : UI.emptyState('✅', 'لا مستحق غير محصَّل', 'كل الاستحقاقات محصَّلة حتى ' + U.dateLabel(asOf, 'short')),
+        : emptyBox('checkCircle', 'لا مستحق غير محصَّل', 'كل الاستحقاقات محصَّلة حتى ' + U.dateLabel(asOf, 'short')),
       U.el('div', { class: 'summary-strip' }, [
         U.el('span', { class: 'muted', text: 'التحصيل يُنشئ سجل دخل وسنداً ويربطه بالاستحقاق تلقائياً.' }),
-        UI.btn('＋ دخل يدوي', { tone: 'ghost', className: 'btn-sm', onClick: function () { openIncomeModal(ctx); } })
+        UI.btn('دخل يدوي', { icon: 'plus', tone: 'ghost', className: 'btn-sm', onClick: function () { openIncomeModal(ctx); } })
       ])
     ]));
 
@@ -376,9 +388,10 @@
     var chargeList = shown.length ? U.el('div', { class: 'list' }, shown.map(function (r) {
       var ch = r.ch, st = r.st;
       var tpl = C.template(ch.templateId);
+      var loc = C.location(ch.locationId);
       var tone = st.status === 'paid' ? 'income' : (st.status === 'partial' ? 'warn' : 'danger');
       return U.el('div', { class: 'list-item' }, [
-        U.el('span', { class: 'ico', text: (C.location(ch.locationId) || {}).icon || '🏠' }),
+        U.el('span', { class: 'tx-ico ' + (st.status === 'paid' ? 'in' : 'out') }, [icon(loc ? loc.icon : null, { size: 20, fallback: 'building' })]),
         U.el('div', { class: 'tx-main' }, [
           U.el('div', { class: 'tx-title', text: ch.label + ' — ' + U.periodLabel(ch.period) }),
           U.el('div', { class: 'tx-meta' }, [
@@ -396,33 +409,24 @@
           U.el('span', { class: 'muted', style: { fontSize: '11px', fontWeight: '400' }, text: st.status === 'paid' ? ' محصَّل' : ' متبقٍ' })
         ]),
         U.el('div', { class: 'tx-actions' }, [
-          st.remaining > 0.001 ? U.el('button', {
-            type: 'button', class: 'icon-btn', title: 'تحصيل', text: '💰',
-            onClick: function () {
-              openCollectModal({
-                chargeId: ch.id, label: ch.label, locationId: ch.locationId,
-                daysLate: U.daysLate(ch.dueDate, asOf), status: st.status, periodLabel: U.periodLabel(ch.period),
-                remaining: st.remaining, amount: st.amount, dueDate: ch.dueDate, paid: st.paid
-              }, ctx);
-            }
+          st.remaining > 0.001 ? UI.iconBtn('cash', 'تحصيل', function () {
+            openCollectModal({
+              chargeId: ch.id, label: ch.label, locationId: ch.locationId,
+              daysLate: U.daysLate(ch.dueDate, asOf), status: st.status, periodLabel: U.periodLabel(ch.period),
+              remaining: st.remaining, amount: st.amount, dueDate: ch.dueDate, paid: st.paid
+            }, ctx);
           }) : null,
-          U.el('button', {
-            type: 'button', class: 'icon-btn', title: 'السندات', text: '🧾',
-            onClick: function () { openReceiptsModal(ch, ctx); }
-          }),
-          U.el('button', {
-            type: 'button', class: 'icon-btn', title: 'تعديل المبلغ/الاستحقاق', text: '✏️',
-            onClick: function () { openChargeModal(ch); }
-          })
+          UI.iconBtn('receipt', 'السندات', function () { openReceiptsModal(ch, ctx); }),
+          UI.iconBtn('edit', 'تعديل المبلغ/الاستحقاق', function () { openChargeModal(ch); })
         ])
       ]);
-    })) : UI.emptyState('📭', 'لا استحقاقات في هذا التصنيف', 'غيّر التصنيف لعرض الباقي.');
+    })) : emptyBox('receipt', 'لا استحقاقات في هذا التصنيف', 'غيّر التصنيف لعرض الباقي.');
 
     rootEl.appendChild(UI.section('الاستحقاقات والدفعات', [
       U.el('div', { class: 'stat-grid' }, [
-        UI.stat({ icon: 'Σ', label: 'إجمالي الاستحقاقات', value: U.fmtMoney(totals.all), sub: rows.length + ' استحقاق من ' + (state.templates || []).length + ' قالب' }),
-        UI.stat({ icon: '✅', label: 'محصَّل', tone: 'income', value: U.fmtMoney(totals.paid), sub: totals.all > 0 ? U.fmtPct(U.pct(totals.paid, totals.all)) + ' من الإجمالي' : '' }),
-        UI.stat({ icon: '⏳', label: 'متبقٍ', tone: 'expense', value: U.fmtMoney(totals.open), sub: 'على ' + rows.filter(function (r) { return r.st.remaining > 0.001; }).length + ' استحقاق' })
+        UI.stat({ icon: 'receipt', label: 'إجمالي الاستحقاقات', value: U.fmtMoney(totals.all), sub: rows.length + ' استحقاق من ' + (state.templates || []).length + ' قالب' }),
+        UI.stat({ icon: 'checkCircle', label: 'محصَّل', tone: 'income', valueClass: 'tx-income', value: U.fmtMoney(totals.paid), sub: totals.all > 0 ? U.fmtPct(U.pct(totals.paid, totals.all)) + ' من الإجمالي' : '' }),
+        UI.stat({ icon: 'hourglass', label: 'متبقٍ', tone: 'warn', valueClass: 'tx-warn', value: U.fmtMoney(totals.open), sub: 'على ' + rows.filter(function (r) { return r.st.remaining > 0.001; }).length + ' استحقاق' })
       ]),
       filterTabs,
       chargeList
@@ -453,28 +457,28 @@
           amount: s.amount
         };
       }))
-    ]) : UI.emptyState('📉', 'لا دخل في هذه الفترة', 'جرّب فترة أخرى أو سجّل تحصيلاً.');
+    ]) : emptyBox('chart', 'لا دخل في هذه الفترة', 'جرّب فترة أخرى أو سجّل تحصيلاً.');
 
     var locRows = byLocation.map(function (s) {
       return U.el('div', { class: 'list-item' }, [
-        U.el('span', { class: 'ico', text: s.icon || '📍' }),
+        U.el('span', { class: 'tx-ico in' }, [icon(s.icon, { size: 20, fallback: 'building' })]),
         U.el('div', { class: 'tx-main' }, [
           U.el('div', { class: 'tx-title', text: s.label }),
           U.el('div', { class: 'tx-meta' }, [U.el('span', { text: s.count + ' دفعة · ' + U.fmtPct(s.pct) })])
         ]),
-        U.el('div', { class: 'tx-amount tx-income', text: U.fmtMoney(s.amount) })
+        UI.amountBlock(s.amount, true, { currency: false })
       ]);
     });
 
     rootEl.appendChild(UI.section('ملخص إيرادات الفترة', [
       UI.rangeTabs(UI.standardRanges(asOf), activeKey, function (r) { activeKey = r.key; render(rootEl, ctx); }),
       UI.statGrid([
-        UI.stat({ icon: '💰', label: 'إجمالي الدخل', tone: 'income', value: U.fmtMoney(sum.income), sub: range.label }),
-        UI.stat({ icon: '🧾', label: 'عدد الدفعات', value: U.fmtNumber(sum.txCount), sub: sum.income > 0 ? 'متوسط ' + U.fmtMoney(U.round1(sum.income / Math.max(1, sum.txCount))) : '' }),
-        UI.stat({ icon: '🏦', label: 'أعلى مصدر', tone: 'primary', value: bySource.length ? U.fmtMoney(bySource[0].amount) : '—', sub: bySource.length ? bySource[0].label + ' (' + U.fmtPct(bySource[0].pct) + ')' : 'لا دخل' })
+        UI.stat({ icon: 'arrowUp', label: 'إجمالي الدخل', tone: 'income', valueClass: 'tx-income', value: U.fmtMoney(sum.income), sub: range.label }),
+        UI.stat({ icon: 'receipt', label: 'عدد الدفعات', value: U.fmtNumber(sum.txCount), sub: sum.income > 0 ? 'متوسط ' + U.fmtMoney(U.round1(sum.income / Math.max(1, sum.txCount))) : '' }),
+        UI.stat({ icon: 'target', label: 'أعلى مصدر', tone: 'primary', value: bySource.length ? U.fmtMoney(bySource[0].amount) : '—', sub: bySource.length ? bySource[0].label + ' (' + U.fmtPct(bySource[0].pct) + ')' : 'لا دخل' })
       ]),
-      UI.card({ title: 'حسب المصدر', icon: '🧭', body: mixBox }),
-      locRows.length ? UI.card({ title: 'حسب المكان', icon: '📍', body: UI.list(locRows, { empty: null }) }) : null
+      UI.card({ title: 'حسب المصدر', icon: 'chart', body: mixBox }),
+      locRows.length ? UI.card({ title: 'حسب المكان', icon: 'building', body: UI.list(locRows, { empty: null }) }) : null
     ]));
 
     /* ============================ 4) إدارة القوالب الخمسة */
@@ -484,7 +488,7 @@
       var openCount = related.filter(function (r) { return r.st.remaining > 0.001; }).length;
       var openTotal = U.sum(related.filter(function (r) { return r.st.remaining > 0.001; }), function (r) { return r.st.remaining; });
       return U.el('div', { class: 'list-item' }, [
-        U.el('span', { class: 'ico', text: loc ? loc.icon : '🏠' }),
+        U.el('span', { class: 'tx-ico' }, [icon(loc ? loc.icon : null, { size: 20, fallback: 'building' })]),
         U.el('div', { class: 'tx-main' }, [
           U.el('div', { class: 'tx-title', text: tpl.label }),
           U.el('div', { class: 'tx-meta' }, [
@@ -498,17 +502,14 @@
           ])
         ]),
         U.el('div', { class: 'tx-actions' }, [
-          U.el('button', {
-            type: 'button', class: 'icon-btn', title: 'تعديل المبلغ/يوم الاستحقاق', text: '✏️',
-            onClick: function () { openTemplateModal(tpl); }
-          })
+          UI.iconBtn('edit', 'تعديل المبلغ/يوم الاستحقاق', function () { openTemplateModal(tpl); })
         ])
       ]);
     });
 
     rootEl.appendChild(UI.section('قوالب الاستحقاق', [
       U.el('div', { class: 'alert alert-info' }, [
-        U.el('div', { class: 'alert-ico', text: '🧩' }),
+        U.el('div', { class: 'alert-ico' }, [icon('info', { size: 14 })]),
         U.el('div', { class: 'alert-main' }, [
           U.el('div', { class: 'alert-title', text: 'المبلغ = قيمة الفترة الواحدة' }),
           U.el('div', { class: 'alert-body', text: 'استوديو فوق المحل: 2,000 كل ثلاثة أشهر (وليست شهرياً). إيجار المحل 1,500 شهرياً، والورشتان 1,900 + 1,500 كل شهر يوم 5، وحجرات العمال 2,000.' })
@@ -517,13 +518,13 @@
       U.el('div', { class: 'list' }, tplRows)
     ]));
 
-    rootEl.appendChild(UI.btn('＋ دخل جديد (تحصيل يدوي)', { tone: 'primary', className: 'btn-block', onClick: function () { openIncomeModal(ctx); } }));
+    rootEl.appendChild(UI.btn('دخل جديد (تحصيل يدوي)', { icon: 'plus', tone: 'primary', className: 'btn-block', onClick: function () { openIncomeModal(ctx); } }));
   }
 
   Fin.Views.income = {
     id: 'income',
     title: 'الإيرادات',
-    icon: '💰',
+    icon: 'wallet',
     order: 3,
     subtitle: 'المستحق لي والتحصيل',
     render: render,

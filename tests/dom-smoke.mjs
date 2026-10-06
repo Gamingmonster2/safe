@@ -114,6 +114,7 @@ const documentStub = {
     if (tag === 'input') n.tagName = 'INPUT';
     return n;
   },
+  createElementNS(ns, tag) { return new Node2(tag); },
   createTextNode(t) { return new TextNode(t); },
   createDocumentFragment() { const f = new Node2('#fragment'); f.__fragment = true; return f; },
   getElementById(id) { return this.body.querySelector('#' + id) || this.documentElement.querySelector('#' + id); },

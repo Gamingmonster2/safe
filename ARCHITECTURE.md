@@ -277,26 +277,41 @@ C:\vpn\safe\
 Fin.Views.dashboard = {
   id: 'dashboard',
   title: 'لوحة اليوم',        // يظهر في شريط التنقل
-  icon: '🏠',
+  icon: 'home',               // اسم أيقونة من Fin.I (لا إيموجي)
   order: 1,
   render(root, ctx) { /* يبني المحتوى داخل root */ },
   destroy() {}                // اختياري
 };
 ```
 
-`ctx = { refresh(), go(viewId), state }`. كل شاشة **تسجّل نفسها** في `Fin.Views` عند التحميل.
+`ctx = { refresh(), go(viewId), state, asOf, today }`. كل شاشة **تسجّل نفسها** في `Fin.Views` عند التحميل.
+
+### `Fin.I` (icons.js) — نظام الأيقونات (إلزامي)
+
+**ممنوع الإيموجي في الواجهة.** كل رمز مرئي = أيقونة SVG من `icons.js` (بلا مكتبات أو خطوط خارجية).
+
+- `Fin.I.svg(name, opts)` → نص SVG (لا يُدرج إلا في حاوية موثوقة).
+- `Fin.I.el(name, opts)` → `<span class="ic-wrap">` يحتوي عنصر `<svg>` مبنيّاً بـ `createElementNS`
+  (بلا `innerHTML` إطلاقاً — حماية XSS، ومفروض باختبار).
+- `Fin.I.has / names / forCategory(key,type) / forLocation(id) / forDomain(tld) / direction(...)`.
+- `opts = { size, width, tone: 'in'|'out'|'loss'|'warn'|'info'|'brand'|'muted', className }`.
+- حقول `icon` في `C.ACCOUNT/locations/templates/categories/methods/domainStatus` **أسماء أيقونات** لا إيموجي.
+- **اتجاه المال**: صعود ▲ أخضر = دخل · هبوط ▼ برتقالي = مصروف (`UI.amountBlock`, `UI.dirBadge`).
 
 ### `Fin.App` (app.js) — الراوتر
 
-- `Fin.App.register(view)`, `Fin.App.go(id)`, `Fin.App.refresh()`
-- المسار: `#/dashboard`, `#/income`, `#/expenses`, `#/accounts`, `#/reports`, `#/agent`, `#/settings`.
+- `Fin.App.register(view)`, `Fin.App.go(id)`, `Fin.App.refresh()`, `Fin.App.adoptViews()`, `Fin.App.tabIds()`
+- المسار: `#/dashboard`, `#/income`, `#/expenses`, `#/accounts`, `#/reports`, `#/domains`, `#/agent`, `#/settings`.
 
 ## 5. قواعد التصميم
 
-- **RTL** كامل: `<html dir="rtl" lang="ar">`. الأرقام تبقى لاتينية (`1,500`) لأنها أوضح للمستخدم.
-- **الوضعان:** نهاري/ليلي عبر `data-theme` على `<html>`، ألوان في `theme.css` فقط.
-  - ليلي: خلفية `#0b1020`, سطح `#141a2e`, نص `#e8ecf6`, أساسي `#2f6df6`, دخل `#22c55e`, مصروف `#f43f5e`, ادخار `#f59e0b`.
-  - نهاري: خلفية `#f4f6fb`, سطح `#ffffff`, نص `#101527`, أساسي `#1d4ed8`, نفس دلالات الدخل/المصروف.
+- **الهوية: على نمط PayPal** — مسطّحة، نظيفة، واثقة. **نهاري:** خلفية `#f5f7fa`، سطح أبيض `#ffffff`،
+  نص كحلي `#001c40`، أزرق أساسي `#0070ba` (PayPal blue). **ليلي:** كحلي عميق `#061428`، سطح `#0e2038`،
+  نص `#f2f6fb`، أزرق `#2f9fe0`. المعرّفات كلها في `theme.css` فقط (لا لون ثابت في أي ملف آخر).
+- **دلالات مالية صارمة**: دخل = أخضر `--c-in` · مصروف = برتقالي `--c-out` · خسارة/تجاوز = أحمر `--c-loss`
+  · تحذير = `--c-warn` · أساسي = أزرق `--c-primary`. **لا تستخدم الأحمر للمصروف** (الأحمر للتجاوز فقط).
+- **RTL** كامل: `<html dir="rtl" lang="ar">`. الأرقام لاتينية (`1,500`) لأنها أوضح.
+- **أيقونات احترافية فقط**: خط واحد (stroke) بمقاس 24، `stroke="currentColor"`، بلا إيموجي (اختبار يفشل عند وجود أي إيموجي).
 - **الجوال أولاً:** أهداف لمس ≥ 44px، شريط تنقل سفلي ثابت على الجوال، آمن للمناطق `env(safe-area-inset-*)`.
 - **إضافة سريعة:** «+ خضار» بضغطة واحدة من الشاشة الرئيسية (أزرار الفئات المفضّلة).
 - **بدون شبكة = بدون كسر:** كل شيء يعمل أوفلاين؛ الوكيل فقط يحتاج إنترنت.

@@ -297,7 +297,7 @@
     });
     var total = U.sum(Object.keys(map), function (k) { return map[k].amount; });
     return Object.keys(map).map(function (k) {
-      var loc = C.location(k) || { name: 'أخرى', icon: '➕' };
+      var loc = C.location(k) || { name: 'أخرى', icon: 'plus' };
       return { key: k, label: loc.name, icon: loc.icon, amount: round(map[k].amount), count: map[k].count, pct: U.pct(map[k].amount, total) };
     }).sort(function (a, b) { return b.amount - a.amount; });
   };
@@ -645,7 +645,7 @@
     if (!d.total) return out;
     if (d.byStatus.expired.length) {
       out.push({
-        level: 'danger', icon: '⛔',
+        level: 'danger', icon: 'alert',
         title: d.byStatus.expired.length + ' نطاق سقط فعلاً!',
         body: d.byStatus.expired.slice(0, 4).map(function (x) { return x.domain + ' (' + x.dueLabel + ')'; }).join('، '),
         go: 'domains'
@@ -653,7 +653,7 @@
     }
     if (d.byStatus.critical.length) {
       out.push({
-        level: 'danger', icon: '🔥',
+        level: 'danger', icon: 'flame',
         title: d.byStatus.critical.length + ' نطاق ينتهي خلال ' + C.DOMAIN_ALERT_DAYS.critical + ' أيام — جدّده الآن',
         body: d.byStatus.critical.slice(0, 4).map(function (x) { return x.domain + ' ' + x.dueLabel + ' · ' + U.fmtMoney(x.price); }).join('، '),
         go: 'domains'
@@ -661,7 +661,7 @@
     }
     if (d.byStatus.soon.length) {
       out.push({
-        level: 'warn', icon: '⏰',
+        level: 'warn', icon: 'clock',
         title: d.byStatus.soon.length + ' نطاق ينتهي خلال شهر',
         body: d.byStatus.soon.slice(0, 5).map(function (x) { return x.domain + ' (' + x.daysLeft + ' يوم)'; }).join('، '),
         go: 'domains'
@@ -669,7 +669,7 @@
     }
     if (d.renewNowCost > 0) {
       out.push({
-        level: 'info', icon: '💳',
+        level: 'info', icon: 'creditCard',
         title: 'تكلفة التجديد القريبة ' + U.fmtMoney(d.renewNowCost),
         body: 'تجديد ' + d.renewNow.length + ' نطاقاً · عندك ' + d.total + ' نطاقاً بتكلفة سنوية ' + U.fmtMoney(d.yearCost) + ' (~' + U.fmtMoney(d.monthlyAvgCost) + ' شهرياً)',
         go: 'domains'
@@ -689,7 +689,7 @@
       var late = rec.items.filter(function (i) { return i.daysLate > 0; });
       out.push({
         level: late.length ? 'danger' : 'warn',
-        icon: '⏳',
+        icon: 'hourglass',
         title: 'مستحق لي ' + U.fmtMoney(rec.total),
         body: late.length
           ? (late.length + ' استحقاق متأخر: ' + late.map(function (i) { return i.label + ' (' + U.fmtMoney(i.remaining) + ')'; }).join('، '))
@@ -700,7 +700,7 @@
 
     if (ob.plannedTotal > 0) {
       out.push({
-        level: 'info', icon: '📌',
+        level: 'info', icon: 'target',
         title: 'مصروفات مخطّطة ' + U.fmtMoney(ob.plannedTotal),
         body: 'ليست ديوناً — لم تُدفع بعد: ' + ob.items.map(function (t) { return t.label + ' ' + U.fmtMoney(t.amount); }).join('، ')
       });
@@ -708,7 +708,7 @@
 
     if (ob.immediateTotal > 0) {
       out.push({
-        level: 'warn', icon: '🧾',
+        level: 'warn', icon: 'receipt',
         title: 'مصروفات معلّقة ' + U.fmtMoney(ob.immediateTotal),
         body: ob.items.filter(function (t) { return !t.planned; }).map(function (t) { return t.label + ' ' + U.fmtMoney(t.amount); }).join('، ')
       });
@@ -717,7 +717,7 @@
     var cm = F.commitments(state);
     if (cm.remainingTotal > 0) {
       out.push({
-        level: 'info', icon: '🏫',
+        level: 'info', icon: 'school',
         title: 'التزامات سنوية: متبقٍ ' + U.fmtMoney(cm.remainingTotal),
         body: cm.list.map(function (c) { return c.label + ' — دُفع ' + U.fmtMoney(c.paidThisYear) + ' من ' + U.fmtMoney(c.annual) + ' (' + c.pct + '%)'; }).join('، ')
       });
@@ -725,7 +725,7 @@
 
     if (ms.expense > ms.income && ms.income > 0) {
       out.push({
-        level: 'warn', icon: '📉',
+        level: 'warn', icon: 'trendDown',
         title: 'مصروف ' + U.monthLabel(ms.monthKey) + ' أكبر من الدخل',
         body: 'دخل ' + U.fmtMoney(ms.income) + ' مقابل مصروف ' + U.fmtMoney(ms.expense) + ' (صافي ' + U.fmtMoney(ms.net, { sign: true }) + ')'
       });
@@ -735,7 +735,7 @@
     if (avgDaily > 0) {
       var monthlyPace = round(avgDaily * 30);
       out.push({
-        level: 'info', icon: '📈',
+        level: 'info', icon: 'trendUp',
         title: 'معدل الصرف اليومي ' + U.fmtMoney(avgDaily),
         body: 'بهذا المعدل تصرف ' + U.fmtMoney(monthlyPace) + ' في الشهر — يكفي رصيدك الحالي ' + U.fmtMoney(F.totalBalance(state)) + ' لمدة ' + (avgDaily > 0 ? U.round(F.totalBalance(state) / avgDaily, 0) : 0) + ' يوم'
       });
@@ -744,7 +744,7 @@
     var apiKey = state && state.settings && state.settings.agent && state.settings.agent.apiKey;
     if (!apiKey) {
       out.push({
-        level: 'info', icon: '🤖',
+        level: 'info', icon: 'robot',
         title: 'المساعد الذكي غير مفعّل',
         body: 'أضف مفتاح DeepSeek من الإعدادات ليعمل التحليل والصوت. بدونه يعمل المحرّك المحلي فقط.'
       });

@@ -11,6 +11,23 @@
   var C = Fin.C, U = Fin.U, UI = Fin.UI, Store = Fin.Store, F = Fin.Finance;
   Fin.Views = Fin.Views || {};
 
+  /* أيقونة SVG احترافية من icons.js (بديل الإيموجي) */
+  function icon(name, opts) {
+    opts = opts || {};
+    if (!Fin.I) return U.el('span', { class: 'ic-wrap' });
+    var key = (name && Fin.I.has(name)) ? name : (opts.fallback || 'package');
+    return Fin.I.el(key, { size: opts.size || 20, tone: opts.tone || null });
+  }
+
+  /* حالة فراغ بأيقونة SVG (بنفس بنية UI.emptyState) */
+  function emptyBox(name, title, body) {
+    return U.el('div', { class: 'empty' }, [
+      U.el('div', { class: 'empty-ico' }, [icon(name, { size: 36 })]),
+      U.el('div', { class: 'empty-title', text: title || 'لا يوجد شيء بعد' }),
+      body ? U.el('div', { class: 'empty-body', text: body }) : null
+    ]);
+  }
+
   /* ------------------------------------------------------ أدوات محلية */
 
   var PERIODS = [
@@ -57,13 +74,19 @@
     return { from: from, to: to, label: U.dateLabel(from, 'short') + ' → ' + U.dateLabel(to, 'short') };
   }
 
+  // شارة فرق مع سهم اتجاه SVG (صعود أخضر / هبوط برتقالي / بلا تغيير)
   function deltaNode(value, opts) {
     opts = opts || {};
     var up = value > 0, flat = Math.abs(value) < 0.005;
     var tone = flat ? 'muted' : (opts.invert ? (up ? 'danger' : 'income') : (up ? 'income' : 'expense'));
-    var arrow = flat ? '▬' : (up ? '▲' : '▼');
-    var text = (flat ? 'بلا تغيير' : (arrow + ' ' + U.fmtMoney(Math.abs(value), { currency: false }) + (opts.pct !== null && opts.pct !== undefined ? ' (' + U.fmtPct(Math.abs(opts.pct)) + ')' : '')));
-    return { node: UI.badge(text, tone), up: up, flat: flat };
+    var badge = UI.badge('', tone);
+    badge.appendChild(icon(flat ? 'equals' : (up ? 'trendUp' : 'trendDown'), { size: 13 }));
+    badge.appendChild(U.el('span', {
+      text: flat
+        ? 'بلا تغيير'
+        : (U.fmtMoney(Math.abs(value), { currency: false }) + (opts.pct !== null && opts.pct !== undefined ? ' (' + U.fmtPct(Math.abs(opts.pct)) + ')' : ''))
+    }));
+    return { node: badge, up: up, flat: flat };
   }
 
   /* ----------------------------------------------------------- حالة الوحدة */
@@ -102,19 +125,19 @@
       var exp = deltaNode(prev.delta.expense, { invert: true, pct: prev.delta.expensePct });
       var net = deltaNode(prev.delta.net, {});
       cmpCards.push(UI.card({
-        title: 'الدخل مقابل ' + prev.b.label, icon: '💰', tone: 'income',
+        title: 'الدخل مقابل ' + prev.b.label, icon: 'arrowUp', tone: 'income',
         value: U.fmtMoney(sum.income),
         sub: 'السابق: ' + U.fmtMoney(prev.b.income),
         body: U.el('div', {}, [inc.node])
       }));
       cmpCards.push(UI.card({
-        title: 'المصروف مقابل ' + prev.b.label, icon: '💸', tone: 'expense',
+        title: 'المصروف مقابل ' + prev.b.label, icon: 'arrowDown', tone: 'expense',
         value: U.fmtMoney(sum.expense),
         sub: 'السابق: ' + U.fmtMoney(prev.b.expense),
         body: U.el('div', {}, [exp.node])
       }));
       cmpCards.push(UI.card({
-        title: 'الصافي مقابل ' + prev.b.label, icon: sum.net >= 0 ? '📈' : '📉',
+        title: 'الصافي مقابل ' + prev.b.label, icon: sum.net >= 0 ? 'trendUp' : 'trendDown',
         tone: sum.net >= 0 ? 'income' : 'expense',
         value: U.fmtMoney(sum.net, { sign: true }),
         sub: 'السابق: ' + U.fmtMoney(prev.b.net, { sign: true }) + ' — ' + prev.b.label,
@@ -124,15 +147,15 @@
 
     rootEl.appendChild(UI.section('ملخص ' + cur.label, [
       UI.statGrid([
-        UI.stat({ icon: '💰', label: 'الدخل', tone: 'income', value: U.fmtMoney(sum.income), sub: sum.txCount + ' معاملة · ' + sum.days + ' يوم' }),
-        UI.stat({ icon: '💸', label: 'المصروف', tone: 'expense', value: U.fmtMoney(sum.expense), sub: 'متوسط يومي ' + U.fmtMoney(sum.avgDailyExpense) }),
-        UI.stat({ icon: '📊', label: 'الصافي', tone: sum.net >= 0 ? 'income' : 'expense', value: U.fmtMoney(sum.net, { sign: true }), sub: sum.income > 0 ? 'نسبة الادخار ' + U.fmtPct(sum.savingRate) : 'لا دخل في الفترة' }),
-        UI.stat({ icon: '⏳', label: 'غير مسدَّد في الفترة', tone: sum.unpaid > 0 ? 'warn' : 'primary', value: U.fmtMoney(sum.unpaid), sub: sum.unpaidCount + ' معاملة · مخطّط ' + U.fmtMoney(sum.planned) })
+        UI.stat({ icon: 'arrowUp', label: 'الدخل', tone: 'income', valueClass: 'tx-income', value: U.fmtMoney(sum.income), sub: sum.txCount + ' معاملة · ' + sum.days + ' يوم' }),
+        UI.stat({ icon: 'arrowDown', label: 'المصروف', tone: 'expense', valueClass: 'tx-expense', value: U.fmtMoney(sum.expense), sub: 'متوسط يومي ' + U.fmtMoney(sum.avgDailyExpense) }),
+        UI.stat({ icon: sum.net >= 0 ? 'trendUp' : 'trendDown', label: 'الصافي', tone: sum.net >= 0 ? 'income' : 'expense', valueClass: sum.net >= 0 ? 'tx-income' : 'tx-expense', value: U.fmtMoney(sum.net, { sign: true }), sub: sum.income > 0 ? 'نسبة الادخار ' + U.fmtPct(sum.savingRate) : 'لا دخل في الفترة' }),
+        UI.stat({ icon: 'hourglass', label: 'غير مسدَّد في الفترة', tone: sum.unpaid > 0 ? 'warn' : 'primary', valueClass: sum.unpaid > 0 ? 'tx-warn' : '', value: U.fmtMoney(sum.unpaid), sub: sum.unpaidCount + ' معاملة · مخطّط ' + U.fmtMoney(sum.planned) })
       ]),
       prev ? U.el('div', { class: 'stat-grid' }, cmpCards) : null,
       prev ? UI.card({
         title: 'مقارنة مفصّلة بالفترة السابقة',
-        icon: '🔁',
+        icon: 'swap',
         body: U.el('div', {}, [
           UI.kv('الفترة الحالية', cur.label + ' (' + U.dateLabel(cur.from, 'short') + ' → ' + U.dateLabel(cur.to, 'short') + ')'),
           UI.kv('الفترة المقارنة', prev.b.label),
@@ -149,8 +172,8 @@
     rootEl.appendChild(UI.section('آخر 6 أشهر', [
       UI.card({
         title: 'الدخل والمصروف شهرياً',
-        icon: '📊',
-        extra: U.el('span', { class: 'muted', text: 'الأخضر دخل · الأحمر مصروف' }),
+        icon: 'chart',
+        extra: U.el('span', { class: 'muted', text: 'الأخضر دخل · البرتقالي مصروف' }),
         body: U.el('div', {}, [
           U.el('div', { class: 'spark-wrap', html: UI.bars(series6, { height: 150 }) }),
           U.el('div', { class: 'list' }, series6.slice().reverse().map(function (m) {
@@ -161,7 +184,7 @@
                   U.el('span', { text: 'دخل ' + U.fmtMoney(m.income) + ' · مصروف ' + U.fmtMoney(m.expense) })
                 ])
               ]),
-              U.el('div', { class: 'tx-amount ' + (m.net >= 0 ? 'tx-income' : 'tx-expense'), text: U.fmtMoney(m.net, { sign: true }) })
+              UI.amountBlock(Math.abs(m.net), m.net >= 0, { currency: false })
             ]);
           }))
         ])
@@ -175,7 +198,7 @@
       rootEl.appendChild(UI.section('أين راحت الفلوس؟', [
         UI.card({
           title: 'توزيع المصروف حسب الفئة',
-          icon: '🥧',
+          icon: 'chart',
           body: U.el('div', { class: 'chart-row' }, [
             U.el('div', { html: UI.donut(items, { size: 168, centerValue: U.fmtCompact ? U.fmtCompact(sum.expense) : String(sum.expense), centerLabel: 'مصروف الفترة' }) }),
             UI.legend(items.map(function (it, i) {
@@ -185,23 +208,23 @@
         }),
         UI.card({
           title: 'النِسَب بالتفصيل',
-          icon: '📋',
+          icon: 'list',
           body: U.el('div', { class: 'list' }, cats.map(function (c) {
             return U.el('div', { class: 'list-item' }, [
-              U.el('span', { class: 'ico', text: c.icon || '📦' }),
+              U.el('span', { class: 'tx-ico out' }, [UI.catIcon({ key: c.key, type: 'expense' }, 'out')]),
               U.el('div', { class: 'tx-main' }, [
                 U.el('div', { class: 'tx-title', text: c.label }),
                 U.el('div', { class: 'tx-meta' }, [U.el('span', { text: c.count + ' معاملة · ' + U.fmtPct(c.pct) + ' من المصروف' })]),
                 UI.hbar(c.pct, { color: c.color || 'var(--c-primary)' })
               ]),
-              U.el('div', { class: 'tx-amount tx-expense', text: U.fmtMoney(c.amount) })
+              UI.amountBlock(c.amount, false, { currency: false })
             ]);
           }))
         })
       ]));
     } else {
       rootEl.appendChild(UI.section('أين راحت الفلوس؟', [
-        UI.emptyState('🥧', 'لا مصروف في هذه الفترة', 'اختر فترة أوسع أو تبويب «الكل».')
+        emptyBox('chart', 'لا مصروف في هذه الفترة', 'اختر فترة أوسع أو تبويب «الكل».')
       ]));
     }
 
@@ -212,7 +235,7 @@
       .concat(rec.items.map(function (i) { return i.locationId || 'other'; })));
 
     var locRows = locKeys.map(function (key) {
-      var loc = C.location(key) || { name: 'أخرى', icon: '➕' };
+      var loc = C.location(key) || { name: 'أخرى', icon: 'building' };
       var collected = 0, cnt = 0;
       byLoc.forEach(function (l) { if (l.key === key) { collected = l.amount; cnt = l.count; } });
       var due = U.sum(rec.items.filter(function (i) { return (i.locationId || 'other') === key; }), function (i) { return i.remaining; });
@@ -220,7 +243,7 @@
       var pct = expected > 0 ? U.pct(collected, expected) : 0;
       var overdue = rec.items.filter(function (i) { return (i.locationId || 'other') === key && i.daysLate > 0; });
       return U.el('div', { class: 'list-item' }, [
-        U.el('span', { class: 'ico', text: loc.icon || '📍' }),
+        U.el('span', { class: 'tx-ico' }, [icon(loc.icon, { size: 20, fallback: 'building' })]),
         U.el('div', { class: 'tx-main' }, [
           U.el('div', { class: 'tx-title', text: loc.name }),
           U.el('div', { class: 'tx-meta' }, [
@@ -230,22 +253,27 @@
           UI.progress(pct, pct >= 100 ? '' : (pct >= 50 ? 'warn' : 'danger')),
           overdue.length ? U.el('div', { class: 'tx-flags' }, [UI.badge('متأخر ' + overdue.length + ' استحقاق بـ ' + U.fmtMoney(U.sum(overdue, function (i) { return i.remaining; })), 'danger')]) : null
         ]),
-        U.el('div', { class: 'tx-amount ' + (due > 0 ? 'tx-expense' : 'tx-income') }, [
-          U.el('span', { text: due > 0 ? U.fmtMoney(due) : '✓' }),
-          U.el('span', { class: 'muted', style: { fontSize: '11px', fontWeight: '400' }, text: due > 0 ? ' متبقٍ' : ' مكتمل' })
-        ])
+        due > 0
+          ? U.el('div', { class: 'tx-amount' }, [
+            UI.amountBlock(due, true, { arrow: false, currency: false }),
+            U.el('span', { class: 'muted', style: { fontSize: '11px', fontWeight: '400' }, text: ' متبقٍ' })
+          ])
+          : U.el('div', { class: 'tx-amount tx-income' }, [
+            icon('checkCircle', { size: 16 }),
+            U.el('span', { class: 'muted', style: { fontSize: '11px', fontWeight: '400' }, text: ' مكتمل' })
+          ])
       ]);
     });
 
     rootEl.appendChild(UI.section('تحليل النطاقات (الأماكن)', [
       locKeys.length ? UI.card({
         title: 'التحصيل مقابل المستحق لكل نطاق',
-        icon: '🗺️',
+        icon: 'building',
         body: U.el('div', { class: 'list' }, locRows)
-      }) : UI.emptyState('🗺️', 'لا نطاقات بعد', 'لا إيرادات ولا استحقاقات في هذه الفترة.'),
+      }) : emptyBox('building', 'لا نطاقات بعد', 'لا إيرادات ولا استحقاقات في هذه الفترة.'),
       UI.statGrid([
-        UI.stat({ icon: '✅', label: 'محصَّل في الفترة', tone: 'income', value: U.fmtMoney(sum.income), sub: 'من ' + byLoc.length + ' نطاق' }),
-        UI.stat({ icon: '⏳', label: 'متبقٍ غير محصَّل', tone: 'expense', value: U.fmtMoney(rec.total), sub: rec.count + ' استحقاق حتى اليوم' })
+        UI.stat({ icon: 'checkCircle', label: 'محصَّل في الفترة', tone: 'income', valueClass: 'tx-income', value: U.fmtMoney(sum.income), sub: 'من ' + byLoc.length + ' نطاق' }),
+        UI.stat({ icon: 'hourglass', label: 'متبقٍ غير محصَّل', tone: 'warn', valueClass: 'tx-warn', value: U.fmtMoney(rec.total), sub: rec.count + ' استحقاق حتى اليوم' })
       ])
     ]));
 
@@ -253,22 +281,22 @@
     var fc = F.cashFlowForecast(state, asOf, forecastDays);
     var forecastCard = UI.card({
       title: 'الرصيد المتوقع خلال ' + forecastDays + ' يوماً',
-      icon: '🔮',
+      icon: 'trendUp',
       extra: U.el('button', {
         type: 'button', class: 'chip', text: forecastDays === 60 ? '90 يوماً' : '60 يوماً',
         onClick: function () { forecastDays = forecastDays === 60 ? 90 : 60; render(rootEl, ctx); }
       }),
       body: U.el('div', {}, [
         U.el('div', { class: 'stat-grid' }, [
-          UI.stat({ icon: '🏦', label: 'الرصيد الحالي', tone: 'primary', value: U.fmtMoney(fc.openingBalance), sub: 'نقطة البداية' }),
-          UI.stat({ icon: '📥', label: 'المتوقع تحصيله', tone: 'income', value: U.fmtMoney(fc.totalExpected), sub: fc.events.length + ' حدث متوقّع' }),
-          UI.stat({ icon: '🎯', label: 'الرصيد بعد ' + forecastDays + ' يوماً', tone: 'income', value: U.fmtMoney(fc.closingBalance), sub: 'حتى ' + U.dateLabel(fc.horizon, 'short') })
+          UI.stat({ icon: 'wallet', label: 'الرصيد الحالي', tone: 'primary', value: U.fmtMoney(fc.openingBalance), sub: 'نقطة البداية' }),
+          UI.stat({ icon: 'arrowUp', label: 'المتوقع تحصيله', tone: 'income', valueClass: 'tx-income', value: U.fmtMoney(fc.totalExpected), sub: fc.events.length + ' حدث متوقّع' }),
+          UI.stat({ icon: 'target', label: 'الرصيد بعد ' + forecastDays + ' يوماً', tone: 'income', valueClass: 'tx-income', value: U.fmtMoney(fc.closingBalance), sub: 'حتى ' + U.dateLabel(fc.horizon, 'short') })
         ]),
         U.el('div', { class: 'spark-wrap', html: UI.sparkline(fc.series.map(function (s) { return s.balance; }), { height: 64, fill: true }) }),
         U.el('div', { class: 'card-sub' }, [U.el('span', { text: 'الخط = الرصيد المتوقع يوماً بيوم (تشمل الاستحقاقات القائمة والقادمة من القوالب — بلا مصروفات جديدة).' })]),
         fc.events.length ? U.el('div', { class: 'list' }, fc.events.map(function (e) {
           return U.el('div', { class: 'list-item' }, [
-            U.el('span', { class: 'ico', text: e.kind === 'receivable' ? '⏳' : '📅' }),
+            U.el('span', { class: 'tx-ico in' }, [icon(e.kind === 'receivable' ? 'hourglass' : 'calendar', { size: 20 })]),
             U.el('div', { class: 'tx-main' }, [
               U.el('div', { class: 'tx-title', text: e.label }),
               U.el('div', { class: 'tx-meta' }, [
@@ -276,9 +304,9 @@
                 U.el('span', { text: ' · ' + (e.kind === 'receivable' ? 'استحقاق قائم غير محصَّل' : 'استحقاق قادم من القالب') })
               ])
             ]),
-            U.el('div', { class: 'tx-amount tx-income', text: U.fmtMoney(e.expected) })
+            UI.amountBlock(e.expected, true, { currency: false })
           ]);
-        })) : UI.emptyState('🔮', 'لا أحداث متوقعة', 'لا استحقاقات قائمة ولا قادمة خلال ' + forecastDays + ' يوماً.')
+        })) : emptyBox('target', 'لا أحداث متوقعة', 'لا استحقاقات قائمة ولا قادمة خلال ' + forecastDays + ' يوماً.')
       ])
     });
     rootEl.appendChild(UI.section('تنبؤ التدفق النقدي', [forecastCard]));
@@ -293,11 +321,11 @@
     rootEl.appendChild(UI.section('التفاصيل', [
       UI.card({
         title: 'أهم 10 مصروفات',
-        icon: '🔝',
+        icon: 'list',
         body: top.length ? U.el('div', { class: 'list' }, top.map(function (tx, i) {
           var cat = C.catExpense(tx.category);
           return U.el('div', { class: 'list-item' }, [
-            U.el('span', { class: 'ico', text: String(i + 1) + '️⃣' }),
+            UI.badge(String(i + 1), 'muted'),
             U.el('div', { class: 'tx-main' }, [
               U.el('div', { class: 'tx-title', text: tx.label || cat.label }),
               U.el('div', { class: 'tx-meta' }, [
@@ -305,35 +333,36 @@
                 tx.note ? U.el('span', { text: ' · ' + tx.note }) : null
               ])
             ]),
-            U.el('div', { class: 'tx-amount tx-expense', text: U.fmtMoney(tx.amount) })
+            UI.amountBlock(tx.amount, false, { currency: false })
           ]);
-        })) : UI.emptyState('🔝', 'لا مصروفات', 'لا يوجد ما يُعرض في هذه الفترة.')
+        })) : emptyBox('list', 'لا مصروفات', 'لا يوجد ما يُعرض في هذه الفترة.')
       }),
       UI.card({
         title: 'أعلى الأيام صرفاً',
-        icon: '📆',
+        icon: 'calendar',
         body: dayList.length ? U.el('div', { class: 'list' }, dayList.map(function (d) {
           return U.el('div', { class: 'list-item' }, [
-            U.el('span', { class: 'ico', text: '📆' }),
+            U.el('span', { class: 'tx-ico out' }, [icon('calendar', { size: 20 })]),
             U.el('div', { class: 'tx-main' }, [
               U.el('div', { class: 'tx-title', text: U.dateLabel(d.date, 'weekday') }),
               U.el('div', { class: 'tx-meta' }, [
                 U.el('span', { text: 'دخل ' + U.fmtMoney(d.income) + ' · صافي ' + U.fmtMoney(d.net, { sign: true }) })
               ])
             ]),
-            U.el('div', { class: 'tx-amount tx-expense', text: U.fmtMoney(d.expense) })
+            UI.amountBlock(d.expense, false, { currency: false })
           ]);
-        })) : UI.emptyState('📆', 'لا أيام بصرف', 'لا مصروف في هذه الفترة.')
+        })) : emptyBox('calendar', 'لا أيام بصرف', 'لا مصروف في هذه الفترة.')
       })
     ]));
 
     /* --------------------------------------------------- 8) التصدير والطباعة */
     var exportCard = UI.card({
       title: 'تصدير وطباعة',
-      icon: '📤',
+      icon: 'download',
       body: U.el('div', {}, [
         U.el('div', { class: 'stat-grid' }, [
-          UI.btn('⬇️ تصدير CSV', {
+          UI.btn('تصدير CSV', {
+            icon: 'download',
             tone: 'ghost',
             onClick: function () {
               try {
@@ -344,7 +373,8 @@
               }
             }
           }),
-          UI.btn('🖨️ طباعة / PDF', {
+          UI.btn('طباعة / PDF', {
+            icon: 'file',
             tone: 'ghost',
             onClick: function () {
               try { window.print(); } catch (e) { UI.toast('تعذّرت الطباعة', 'danger'); }
@@ -367,7 +397,7 @@
   Fin.Views.reports = {
     id: 'reports',
     title: 'التقارير',
-    icon: '📊',
+    icon: 'chart',
     order: 5,
     subtitle: 'مقارنات ورسوم وتنبؤ',
     render: render,

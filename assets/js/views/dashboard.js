@@ -10,6 +10,23 @@
   var C = Fin.C, U = Fin.U, UI = Fin.UI, Store = Fin.Store, F = Fin.Finance;
   Fin.Views = Fin.Views || {};
 
+  /* أيقونة SVG احترافية من icons.js (بديل الإيموجي) */
+  function icon(name, opts) {
+    opts = opts || {};
+    if (!Fin.I) return U.el('span', { class: 'ic-wrap' });
+    var key = (name && Fin.I.has(name)) ? name : (opts.fallback || 'package');
+    return Fin.I.el(key, { size: opts.size || 20, tone: opts.tone || null });
+  }
+
+  /* حالة فراغ بأيقونة SVG (بنفس بنية UI.emptyState) */
+  function emptyBox(name, title, body) {
+    return U.el('div', { class: 'empty' }, [
+      U.el('div', { class: 'empty-ico' }, [icon(name, { size: 36 })]),
+      U.el('div', { class: 'empty-title', text: title || 'لا يوجد شيء بعد' }),
+      body ? U.el('div', { class: 'empty-body', text: body }) : null
+    ]);
+  }
+
   function go(id) { if (Fin.App && Fin.App.go) Fin.App.go(id); }
 
   // إغلاق يدوي للنافذة بعد نجاح العملية (نستخدمه داخل أزرار close:false)
@@ -32,7 +49,7 @@
     var form = null;
 
     UI.modal({
-      title: cat.icon + ' ' + cat.label,
+      title: cat.label,
       body: null,
       onMount: function (card) {
         form = UI.form([
@@ -78,7 +95,7 @@
     var net = d.net;
     return U.el('div', { class: 'card card-hero' + (net >= 0 ? ' card-income' : ' card-expense') }, [
       U.el('div', { class: 'card-head' }, [
-        U.el('span', { class: 'ico', text: '📅' }),
+        icon('calendar', { size: 20 }),
         U.el('div', { class: 'card-title', text: 'يوم ' + U.dateLabel(d.date) }),
         U.el('div', { class: 'card-extra' }, [
           U.el('span', { class: 'badge badge-' + (net >= 0 ? 'income' : 'danger'), text: 'صافي اليوم ' + U.fmtMoney(net, { sign: true }) })
@@ -112,7 +129,7 @@
         title: 'إضافة ' + cat.label + (cat.quick ? ' — المقترح ' + U.fmtMoney(cat.quick) : ''),
         onClick: function () { quickAdd(key); }
       }, [
-        U.el('span', { class: 'quick-ico', text: cat.icon }),
+        U.el('span', { class: 'quick-ico' }, [icon(cat.icon, { size: 22, tone: 'out', fallback: 'package' })]),
         U.el('span', { class: 'quick-label', text: cat.label }),
         cat.quick ? U.el('span', { class: 'quick-hint', text: U.fmtMoneyPlain(cat.quick) }) : null
       ]));
@@ -123,7 +140,7 @@
   function receivingSection(rec) {
     var body = [];
     if (!rec.items.length) {
-      body.push(UI.emptyState('✅', 'كل الاستحقاقات محصَّلة', 'لا يوجد إيجار متأخر أو غير محصَّل'));
+      body.push(emptyBox('checkCircle', 'كل الاستحقاقات محصَّلة', 'لا يوجد إيجار متأخر أو غير محصَّل'));
     } else {
       body.push(U.el('div', { class: 'summary-strip' }, [
         U.el('div', { class: 'summary-cell' }, [
@@ -159,7 +176,7 @@
         form = UI.form([
           { name: 'amount', label: 'المبلغ المحصَّل', type: 'money', required: true, hint: 'المتبقي: ' + U.fmtMoney(item.remaining) + ' — ' + item.periodLabel },
           { name: 'date', label: 'تاريخ التحصيل', type: 'date', value: U.todayISO(), required: true },
-          { name: 'method', label: 'الطريقة', type: 'select', value: 'cash', options: C.PAYMENT_METHODS.map(function (m) { return { value: m.key, label: m.icon + ' ' + m.label }; }) },
+          { name: 'method', label: 'الطريقة', type: 'select', value: 'cash', options: C.PAYMENT_METHODS.map(function (m) { return { value: m.key, label: m.label }; }) },
           { name: 'note', label: 'ملاحظة / رقم السند', type: 'text', placeholder: item.receiptNo || 'اختياري' }
         ], { values: { amount: item.remaining, date: U.todayISO() } });
         card.querySelector('.modal-body').appendChild(form.el);
@@ -186,11 +203,27 @@
     });
   }
 
+  /* تنبيهات finance.js — تُعرض بأيقونات SVG لا بإيموجي */
+  var ALERT_ICON = { danger: 'flame', warn: 'alert', info: 'info', success: 'checkCircle' };
+
+  function alertNode(a) {
+    var level = a.level || 'info';
+    var name = (Fin.I && Fin.I.has(a.icon)) ? a.icon : (ALERT_ICON[level] || 'info');
+    return U.el('div', { class: 'alert alert-' + level }, [
+      U.el('div', { class: 'alert-ico' }, [icon(name, { size: 14 })]),
+      U.el('div', { class: 'alert-main' }, [
+        U.el('div', { class: 'alert-title', text: a.title || '' }),
+        a.body ? U.el('div', { class: 'alert-body', text: a.body }) : null
+      ]),
+      a.onClick ? UI.iconBtn('chevronLeft', 'فتح', a.onClick) : null
+    ]);
+  }
+
   function alertsSection(alerts) {
     if (!alerts.length) return null;
     return UI.section('تنبيهات', alerts.slice(0, 5).map(function (a) {
       if (a.go) a.onClick = function () { go(a.go); };
-      return UI.alertBox(a);
+      return alertNode(a);
     }));
   }
 
@@ -206,7 +239,7 @@
     return UI.section('النطاقات — الأقرب للانتهاء', [
       U.el('div', { class: 'card' + (isUrgent ? ' card-expense' : '') }, [
         U.el('div', { class: 'card-head' }, [
-          U.el('span', { class: 'ico', text: isUrgent ? '🔥' : '🌐' }),
+          icon(isUrgent ? 'flame' : 'globe', { size: 20 }),
           U.el('div', { class: 'card-title', text: isUrgent
             ? (urgent.length + ' نطاق يحتاج تجديداً — أقربها ' + stats.next.domain)
             : ('كل النطاقات بعيدة — أقربها ' + stats.next.domain) }),
@@ -228,7 +261,7 @@
 
   function domainMini(d) {
     return U.el('div', { class: 'domain-row domain-' + d.status }, [
-      U.el('div', { class: 'domain-ico', text: d.statusIcon }),
+      U.el('div', { class: 'domain-ico' }, [icon(d.statusIcon, { size: 20, fallback: 'globe' })]),
       U.el('div', { class: 'domain-main' }, [
         U.el('div', { class: 'domain-name', text: d.domain }),
         U.el('div', { class: 'domain-meta', text: U.dateLabel(d.expiry, 'short') + ' · ' + d.dueLabel + ' · ' + U.fmtMoney(d.price) })
@@ -243,7 +276,7 @@
     return UI.section('نظرة سريعة', [
       U.el('div', { class: 'card' }, [
         U.el('div', { class: 'card-head' }, [
-          U.el('span', { class: 'ico', text: '📈' }),
+          icon('trendUp', { size: 20 }),
           U.el('div', { class: 'card-title', text: 'الرصيد — آخر 30 يوماً' }),
           U.el('div', { class: 'card-extra' }, [
             U.el('span', { class: 'muted', text: 'من ' + U.fmtMoney(values.length ? values[0] : 0) + ' إلى ' + U.fmtMoney(F.totalBalance(state)) })
@@ -253,9 +286,9 @@
       ]),
       U.el('div', { class: 'card' }, [
         U.el('div', { class: 'card-head' }, [
-          U.el('span', { class: 'ico', text: '📊' }),
+          icon('chart', { size: 20 }),
           U.el('div', { class: 'card-title', text: 'دخل ومصروف — 6 أشهر' }),
-          U.el('div', { class: 'card-extra' }, [U.el('span', { class: 'muted', text: 'أخضر دخل · أحمر مصروف' })])
+          U.el('div', { class: 'card-extra' }, [U.el('span', { class: 'muted', text: 'أخضر دخل · برتقالي مصروف' })])
         ]),
         U.el('div', { class: 'card-body', html: UI.bars(months, { width: 340, height: 150 }) })
       ]),
@@ -273,7 +306,7 @@
           size: 150, centerValue: U.fmtCompact(total), centerLabel: 'مصروف الشهر'
         }) }),
         UI.legend(cats.slice(0, 6).map(function (c) {
-          return { label: c.icon + ' ' + c.label, color: c.color, amount: c.amount, valueText: U.fmtMoney(c.amount) + ' · ' + c.pct + '%' };
+          return { label: c.label, color: c.color, amount: c.amount, valueText: U.fmtMoney(c.amount) + ' · ' + c.pct + '%' };
         }))
       ]),
       UI.btn('كل المصروفات', { tone: 'ghost', size: 'sm', onClick: function () { go('expenses'); } })
@@ -284,7 +317,7 @@
     var m = F.monthSummary(state, U.monthKey(asOf), asOf);
     return U.el('div', { class: 'card' }, [
       U.el('div', { class: 'card-head' }, [
-        U.el('span', { class: 'ico', text: '🗓️' }),
+        icon('calendar', { size: 20 }),
         U.el('div', { class: 'card-title', text: 'شهر ' + m.label + (m.partial ? ' (حتى اليوم)' : '') }),
         U.el('div', { class: 'card-extra' }, [
           U.el('span', { class: 'badge badge-' + (m.net >= 0 ? 'income' : 'danger'), text: U.fmtMoney(m.net, { sign: true }) })
@@ -304,7 +337,7 @@
   Fin.Views.dashboard = {
     id: 'dashboard',
     title: 'لوحة اليوم',
-    icon: '🏠',
+    icon: 'home',
     order: 1,
     subtitle: 'كل شيء في مكان واحد',
 
@@ -320,7 +353,7 @@
 
       if (asOf !== today) {
         rootEl.appendChild(U.el('div', { class: 'alert alert-info' }, [
-          U.el('div', { class: 'alert-ico', text: '🗓️' }),
+          U.el('div', { class: 'alert-ico' }, [icon('calendar', { size: 14 })]),
           U.el('div', { class: 'alert-main' }, [
             U.el('div', { class: 'alert-title', text: 'تعرض آخر يوم فيه حركات: ' + U.dateLabel(asOf) }),
             U.el('div', { class: 'alert-body', text: 'اليوم (' + U.dateLabel(today, 'short') + ') لم تُسجّل فيه أي حركة بعد. أضف مصروفاً من الأعلى وسيتحوّل العرض إليه تلقائياً.' })
@@ -370,7 +403,7 @@
       rootEl.appendChild(UI.section('الأموال المجمّعة في الصندوق', [
         U.el('div', { class: 'card' }, [
           U.el('div', { class: 'card-head' }, [
-            U.el('span', { class: 'ico', text: '💵' }),
+            icon('cash', { size: 20 }),
             U.el('div', { class: 'card-title', text: 'النقد الموجود: ' + U.fmtMoney(funds.total) }),
             U.el('div', { class: 'card-extra' }, [UI.badge('لا ديون', 'income')])
           ]),
@@ -400,9 +433,7 @@
       var recent = F.txInRange(state, U.addDays(asOf, -14), asOf, { includePlanned: false }).slice(0, 8);
       rootEl.appendChild(UI.section('آخر الحركات', [
         UI.list(recent, {
-          emptyIcon: '🧾',
-          emptyTitle: 'لا حركات بعد',
-          emptyBody: 'ابدأ بإضافة مصروف من الأعلى',
+          empty: emptyBox('receipt', 'لا حركات بعد', 'ابدأ بإضافة مصروف من الأعلى'),
           render: function (tx) {
             return UI.txRow(tx, {
               showRelative: true,
@@ -457,7 +488,7 @@
           { name: 'amount', label: 'المبلغ', type: 'money', required: true },
           {
             name: 'category', label: 'الفئة', type: 'select',
-            options: (tx.type === 'income' ? C.INCOME_CATEGORIES : C.EXPENSE_CATEGORIES).map(function (c) { return { value: c.key, label: c.icon + ' ' + c.label }; })
+            options: (tx.type === 'income' ? C.INCOME_CATEGORIES : C.EXPENSE_CATEGORIES).map(function (c) { return { value: c.key, label: c.label }; })
           },
           { name: 'date', label: 'التاريخ', type: 'date', required: true },
           { name: 'note', label: 'ملاحظة', type: 'text' },

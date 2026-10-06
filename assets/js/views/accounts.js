@@ -11,6 +11,23 @@
   var C = Fin.C, U = Fin.U, UI = Fin.UI, Store = Fin.Store, F = Fin.Finance;
   Fin.Views = Fin.Views || {};
 
+  /* أيقونة SVG احترافية من icons.js (بديل الإيموجي) */
+  function icon(name, opts) {
+    opts = opts || {};
+    if (!Fin.I) return U.el('span', { class: 'ic-wrap' });
+    var key = (name && Fin.I.has(name)) ? name : (opts.fallback || 'package');
+    return Fin.I.el(key, { size: opts.size || 20, tone: opts.tone || null });
+  }
+
+  /* حالة فراغ بأيقونة SVG (بنفس بنية UI.emptyState) */
+  function emptyBox(name, title, body) {
+    return U.el('div', { class: 'empty' }, [
+      U.el('div', { class: 'empty-ico' }, [icon(name, { size: 36 })]),
+      U.el('div', { class: 'empty-title', text: title || 'لا يوجد شيء بعد' }),
+      body ? U.el('div', { class: 'empty-body', text: body }) : null
+    ]);
+  }
+
   /* ------------------------------------------------------ أدوات محلية */
 
   function kindLabel(kind) {
@@ -18,9 +35,10 @@
     if (kind === 'cash') return 'نقد';
     return 'حساب';
   }
-  function accountIcon(acc) {
-    if (acc.icon) return acc.icon;
-    return acc.kind === 'saving' ? '🏦' : '💵';
+  // اسم أيقونة صالح دائماً (يتعامل مع الحسابات القديمة التي حُفظت بإيموجي)
+  function accountIconName(acc) {
+    if (acc && acc.icon && Fin.I && Fin.I.has(acc.icon)) return acc.icon;
+    return (acc && acc.kind === 'saving') ? 'bank' : 'cash';
   }
 
   /* ================================================ نافذة تعديل الحساب */
@@ -73,7 +91,7 @@
       title: 'تسجيل دفع: ' + (tx.label || C.catExpense(tx.category).label),
       body: U.el('div', {}, [
         U.el('div', { class: 'alert alert-warn' }, [
-          U.el('div', { class: 'alert-ico', text: '💳' }),
+          U.el('div', { class: 'alert-ico' }, [icon('creditCard', { size: 14 })]),
           U.el('div', { class: 'alert-main' }, [
             U.el('div', { class: 'alert-title', text: 'سيُخصم ' + U.fmtMoney(tx.amount) + ' من الرصيد' }),
             U.el('div', { class: 'alert-body' }, [
@@ -178,7 +196,7 @@
       onSubmit: function () {
         var v = form.getValues();
         if (!v.name) { UI.toast('أدخل اسم الحساب', 'danger'); return { ok: false }; }
-        Store.addAccount({ name: v.name, opening: Number(v.opening) || 0, kind: v.kind, icon: v.kind === 'saving' ? '🏦' : '💵' });
+        Store.addAccount({ name: v.name, opening: Number(v.opening) || 0, kind: v.kind, icon: v.kind === 'saving' ? 'bank' : 'cash' });
         UI.toast('تم إضافة الحساب', 'success');
         return { ok: true };
       }
@@ -208,7 +226,7 @@
       var bal = F.balanceOf(state, acc.id);
       return U.el('div', { class: 'card ' + (acc.kind === 'saving' ? 'card-primary' : 'card-income'), onClick: function () { openAccountModal(acc, ctx); }, role: 'button', tabindex: '0' }, [
         U.el('div', { class: 'card-head' }, [
-          U.el('span', { class: 'ico', text: accountIcon(acc) }),
+          icon(accountIconName(acc), { size: 20 }),
           U.el('div', { class: 'card-title', text: acc.name }),
           U.el('div', { class: 'card-extra', text: kindLabel(acc.kind) })
         ]),
@@ -225,19 +243,20 @@
 
     rootEl.appendChild(UI.section('الحسابات', [
       U.el('div', { class: 'stat-grid' }, [
-        UI.stat({ icon: '🧮', label: 'إجمالي الأموال', tone: 'primary', value: U.fmtMoney(total), sub: (state.accounts || []).length + ' حساب · نقد + ادخار' }),
-        UI.stat({ icon: '💵', label: 'النقد (الصندوق)', value: U.fmtMoney(cash), sub: total > 0 ? U.fmtPct(U.pct(cash, total)) + ' من الإجمالي' : '' }),
-        UI.stat({ icon: '🏦', label: 'ادخار', tone: 'warn', value: U.fmtMoney(saving), sub: total > 0 ? U.fmtPct(U.pct(saving, total)) + ' من الإجمالي' : '' }),
-        UI.stat({ icon: '📊', label: 'نسبة الادخار هذا الشهر', tone: sav.rate >= 0 ? 'income' : 'expense', value: U.fmtPct(sav.rate), sub: 'صافي ' + U.fmtMoney(sav.net, { sign: true }) + ' من دخل ' + U.fmtMoney(sav.income) })
+        UI.stat({ icon: 'coins', label: 'إجمالي الأموال', tone: 'primary', value: U.fmtMoney(total), sub: (state.accounts || []).length + ' حساب · نقد + ادخار' }),
+        UI.stat({ icon: 'cash', label: 'النقد (الصندوق)', valueClass: 'tx-income', value: U.fmtMoney(cash), sub: total > 0 ? U.fmtPct(U.pct(cash, total)) + ' من الإجمالي' : '' }),
+        UI.stat({ icon: 'piggy', label: 'ادخار', tone: 'primary', value: U.fmtMoney(saving), sub: total > 0 ? U.fmtPct(U.pct(saving, total)) + ' من الإجمالي' : '' }),
+        UI.stat({ icon: 'percent', label: 'نسبة الادخار هذا الشهر', tone: sav.rate >= 0 ? 'income' : 'expense', valueClass: sav.rate >= 0 ? 'tx-income' : 'tx-expense', value: U.fmtPct(sav.rate), sub: 'صافي ' + U.fmtMoney(sav.net, { sign: true }) + ' من دخل ' + U.fmtMoney(sav.income) })
       ]),
       U.el('div', { class: 'stat-grid' }, accCards),
-      UI.btn('＋ حساب جديد', { tone: 'ghost', className: 'btn-block', onClick: function () { openAddAccountModal(ctx); } })
+      UI.btn('حساب جديد', { icon: 'plus', tone: 'ghost', className: 'btn-block', onClick: function () { openAddAccountModal(ctx); } })
     ]));
 
     /* ============================== 2) الأموال المجمّعة (من أين جاء النقد) */
     var fundRows = funds.sources.map(function (s) {
+      var isIn = s.amount >= 0;
       return U.el('div', { class: 'list-item' }, [
-        U.el('span', { class: 'ico', text: s.amount >= 0 ? '➕' : '➖' }),
+        U.el('span', { class: 'tx-ico ' + (isIn ? 'in' : 'out') }, [icon(isIn ? 'arrowUp' : 'arrowDown', { size: 20 })]),
         U.el('div', { class: 'tx-main' }, [
           U.el('div', { class: 'tx-title', text: s.label }),
           U.el('div', { class: 'tx-meta' }, [
@@ -245,20 +264,20 @@
             s.fromToday ? U.el('span', { class: 'tx-note', text: ' · اليوم' }) : null
           ])
         ]),
-        U.el('div', { class: 'tx-amount ' + (s.amount >= 0 ? 'tx-income' : 'tx-expense'), text: U.fmtMoney(s.amount, { sign: true }) })
+        UI.amountBlock(Math.abs(s.amount), isIn, { currency: false })
       ]);
     });
 
     rootEl.appendChild(UI.section('الأموال المجمّعة في الصندوق', [
       U.el('div', { class: 'stat-grid' }, [
-        UI.stat({ icon: '💰', label: 'النقد الآن', tone: 'income', value: U.fmtMoney(funds.total), sub: 'في الصندوق' }),
-        UI.stat({ icon: '🕰️', label: 'كان قبل اليوم', value: U.fmtMoney(funds.opening), sub: funds.openingNote }),
-        UI.stat({ icon: '📥', label: 'دخل اليوم', tone: 'income', value: U.fmtMoney(funds.todayIncome), sub: 'إيجارات محصَّلة' }),
-        UI.stat({ icon: '📤', label: 'مصروف اليوم', tone: 'expense', value: U.fmtMoney(funds.todayExpense), sub: 'خضار ومواد وخبز وقهوة' })
+        UI.stat({ icon: 'cash', label: 'النقد الآن', tone: 'income', valueClass: 'tx-income', value: U.fmtMoney(funds.total), sub: 'في الصندوق' }),
+        UI.stat({ icon: 'clock', label: 'كان قبل اليوم', value: U.fmtMoney(funds.opening), sub: funds.openingNote }),
+        UI.stat({ icon: 'arrowUp', label: 'دخل اليوم', tone: 'income', valueClass: 'tx-income', value: U.fmtMoney(funds.todayIncome), sub: 'إيجارات محصَّلة' }),
+        UI.stat({ icon: 'arrowDown', label: 'مصروف اليوم', tone: 'expense', valueClass: 'tx-expense', value: U.fmtMoney(funds.todayExpense), sub: 'خضار ومواد وخبز وقهوة' })
       ]),
-      UI.card({ title: 'من أين جاء النقد الموجود', icon: '🧭', body: U.el('div', { class: 'list' }, fundRows) }),
+      UI.card({ title: 'من أين جاء النقد الموجود', icon: 'grid', body: U.el('div', { class: 'list' }, fundRows) }),
       U.el('div', { class: 'alert alert-info' }, [
-        U.el('div', { class: 'alert-ico', text: '✅' }),
+        U.el('div', { class: 'alert-ico' }, [icon('checkCircle', { size: 14 })]),
         U.el('div', { class: 'alert-main' }, [
           U.el('div', { class: 'alert-title', text: 'لا ديون عليك' }),
           U.el('div', { class: 'alert-body', text: 'كل ما في الصندوق أموال مجمّعة من إيراداتك. المصروفات المخطّطة أدناه لم تُدفع بعد، ولا تُخصم من الرصيد إلا عند الدفع.' })
@@ -269,7 +288,7 @@
     /* ============================== 3) المصروفات المخطّطة (ليست ديوناً) */
     var plannedRows = planned.map(function (tx) {
       return U.el('div', { class: 'list-item' }, [
-        U.el('span', { class: 'ico', text: (C.catExpense(tx.category) || {}).icon || '📌' }),
+        U.el('span', { class: 'tx-ico out' }, [UI.catIcon({ key: tx.category, type: 'expense' }, 'out')]),
         U.el('div', { class: 'tx-main' }, [
           U.el('div', { class: 'tx-title', text: tx.label || C.catExpense(tx.category).label }),
           U.el('div', { class: 'tx-meta' }, [
@@ -278,7 +297,7 @@
           ]),
           U.el('div', { class: 'tx-flags' }, [UI.badge('لم يُدفع', 'warn')])
         ]),
-        U.el('div', { class: 'tx-amount', text: U.fmtMoney(tx.amount) }),
+        UI.amountBlock(tx.amount, false, { currency: false }),
         U.el('div', { class: 'tx-actions' }, [
           U.el('button', {
             type: 'button', class: 'btn btn-sm btn-success', text: 'دفعت',
@@ -290,11 +309,11 @@
 
     rootEl.appendChild(UI.section('مصروفات مخطّطة — ليست ديوناً', [
       U.el('div', { class: 'stat-grid' }, [
-        UI.stat({ icon: '📌', label: 'لم تُدفع بعد', tone: 'warn', value: U.fmtMoney(plannedTotal), sub: planned.length + ' بند — غير محسوبة في الرصيد' }),
-        UI.stat({ icon: '💵', label: 'يكفيها من النقد؟', tone: cash >= plannedTotal ? 'income' : 'expense', value: cash >= plannedTotal ? 'نعم' : 'لا', sub: 'النقد ' + U.fmtMoney(cash) + ' مقابل ' + U.fmtMoney(plannedTotal) }),
-        UI.stat({ icon: 'Σ', label: 'المتبقي بعد دفعها', value: U.fmtMoney(U.round(total - plannedTotal)), sub: 'من إجمالي ' + U.fmtMoney(total) })
+        UI.stat({ icon: 'hourglass', label: 'لم تُدفع بعد', tone: 'warn', valueClass: 'tx-warn', value: U.fmtMoney(plannedTotal), sub: planned.length + ' بند — غير محسوبة في الرصيد' }),
+        UI.stat({ icon: 'cash', label: 'يكفيها من النقد؟', tone: cash >= plannedTotal ? 'income' : 'expense', value: cash >= plannedTotal ? 'نعم' : 'لا', sub: 'النقد ' + U.fmtMoney(cash) + ' مقابل ' + U.fmtMoney(plannedTotal) }),
+        UI.stat({ icon: 'minus', label: 'المتبقي بعد دفعها', valueClass: 'tx-warn', value: U.fmtMoney(U.round(total - plannedTotal)), sub: 'من إجمالي ' + U.fmtMoney(total) })
       ]),
-      planned.length ? UI.card({ title: 'المخطّط (' + U.fmtMoney(plannedTotal) + ')', icon: '📌', tone: 'warn', body: U.el('div', { class: 'list' }, plannedRows) }) : UI.emptyState('✅', 'لا مصروفات معلّقة', 'كل شيء مدفوع.')
+      planned.length ? UI.card({ title: 'المخطّط (' + U.fmtMoney(plannedTotal) + ')', icon: 'hourglass', tone: 'warn', body: U.el('div', { class: 'list' }, plannedRows) }) : emptyBox('checkCircle', 'لا مصروفات معلّقة', 'كل شيء مدفوع.')
     ]));
 
     /* ============================== 4) الالتزامات السنوية (خطط سنوية) */
@@ -302,7 +321,7 @@
       var commitCards = cm.list.map(function (c) {
         return U.el('div', { class: 'card' }, [
           U.el('div', { class: 'card-head' }, [
-            U.el('span', { class: 'ico', text: c.icon || '📅' }),
+            icon(c.icon, { size: 20, fallback: 'calendar' }),
             U.el('div', { class: 'card-title', text: c.label }),
             U.el('div', { class: 'card-extra' }, [UI.badge('سنوي', 'info')])
           ]),
@@ -317,9 +336,9 @@
       });
       rootEl.appendChild(UI.section('التزامات سنوية (خطط)', [
         U.el('div', { class: 'stat-grid' }, [
-          UI.stat({ icon: '📅', label: 'إجمالي السنوي', value: U.fmtMoney(cm.annualTotal), sub: cm.count + ' التزام' }),
-          UI.stat({ icon: '✅', label: 'المدفوع', tone: 'income', value: U.fmtMoney(cm.paidTotal) }),
-          UI.stat({ icon: '⏳', label: 'المتبقي', tone: 'warn', value: U.fmtMoney(cm.remainingTotal), sub: 'يُسدَّد على دفعات خلال السنة' })
+          UI.stat({ icon: 'calendar', label: 'إجمالي السنوي', value: U.fmtMoney(cm.annualTotal), sub: cm.count + ' التزام' }),
+          UI.stat({ icon: 'checkCircle', label: 'المدفوع', tone: 'income', valueClass: 'tx-income', value: U.fmtMoney(cm.paidTotal) }),
+          UI.stat({ icon: 'hourglass', label: 'المتبقي', tone: 'warn', valueClass: 'tx-warn', value: U.fmtMoney(cm.remainingTotal), sub: 'يُسدَّد على دفعات خلال السنة' })
         ]),
         U.el('div', { class: 'stat-grid' }, commitCards),
         U.el('div', { class: 'muted', text: 'هذه خطط سنوية وليست ديوناً — التطبيق يعرضها للمتابعة فقط.' })
@@ -334,28 +353,28 @@
 
     rootEl.appendChild(UI.section('الادخار', [
       U.el('div', { class: 'stat-grid' }, [
-        UI.stat({ icon: '🏦', label: 'رصيد الادخار', tone: 'warn', value: U.fmtMoney(saving), sub: 'من إجمالي ثروة ' + U.fmtMoney(total) }),
-        UI.stat({ icon: '📉', label: 'يكفي مصاريفك', value: monthsText, sub: 'بمتوسط صرف شهري ' + U.fmtMoney(sav.avgMonthlyExpense) }),
-        UI.stat({ icon: '⚡', label: 'مصروف الشهر الجاري', tone: 'expense', value: U.fmtMoney(sav.expense), sub: 'من دخل ' + U.fmtMoney(sav.income) })
+        UI.stat({ icon: 'piggy', label: 'رصيد الادخار', tone: 'primary', value: U.fmtMoney(saving), sub: 'من إجمالي ثروة ' + U.fmtMoney(total) }),
+        UI.stat({ icon: 'hourglass', label: 'يكفي مصاريفك', value: monthsText, sub: 'بمتوسط صرف شهري ' + U.fmtMoney(sav.avgMonthlyExpense) }),
+        UI.stat({ icon: 'flame', label: 'مصروف الشهر الجاري', tone: 'expense', valueClass: 'tx-expense', value: U.fmtMoney(sav.expense), sub: 'من دخل ' + U.fmtMoney(sav.income) })
       ]),
       U.el('div', { class: 'alert alert-warn' }, [
-        U.el('div', { class: 'alert-ico', text: '🔥' }),
+        U.el('div', { class: 'alert-ico' }, [icon('flame', { size: 14 })]),
         U.el('div', { class: 'alert-main' }, [
           U.el('div', { class: 'alert-title', text: savingNote + ' التضخم في ليبيا يرفع الأسعار بسرعة' }),
           U.el('div', { class: 'alert-body', text: 'المعنى العملي: ' + U.fmtMoney(sav.savingBalance) + ' مدخرة اليوم لا تشتري ما كانت تشتريه قبل سنة. لا تنتظر — حوّل مبلغاً صغيراً كل شهر.' })
         ])
       ]),
-      UI.btn('🏦 حوّل إلى الادخار', { tone: 'primary', className: 'btn-block', onClick: function () { openTransferModal(state, ctx, null); } }),
+      UI.btn('حوّل إلى الادخار', { icon: 'piggy', tone: 'primary', className: 'btn-block', onClick: function () { openTransferModal(state, ctx, null); } }),
       U.el('div', { class: 'summary-strip' }, [
         U.el('span', { class: 'muted', text: 'التحويل ينقل المبلغ من النقد إلى الادخار بلا تغيير في إجمالي ثروتك.' }),
-        UI.btn('من النقد', { tone: 'ghost', className: 'btn-sm', onClick: function () { openTransferModal(state, ctx, 'cash'); } })
+        UI.btn('من النقد', { icon: 'cash', tone: 'ghost', className: 'btn-sm', onClick: function () { openTransferModal(state, ctx, 'cash'); } })
       ])
     ]));
 
     /* ============================================== 5) صافي الموجود */
     var netCard = UI.card({
       title: 'صافي الموجود',
-      icon: '⚖️',
+      icon: 'scale',
       tone: 'income',
       value: U.fmtMoney(netWealth),
       sub: 'ما عندك فعلاً + ما سيصلك من إيجارات',
@@ -372,7 +391,7 @@
 
     var compCard = UI.card({
       title: 'من أين تتكوّن أموالك',
-      icon: '🧭',
+      icon: 'grid',
       body: U.el('div', {}, [
         UI.kv('نقد في الصندوق', U.fmtMoney(cash) + ' (' + (total > 0 ? U.fmtPct(U.pct(cash, total)) : '0%') + ')'),
         UI.kv('ادخار', U.fmtMoney(saving) + ' (' + (total > 0 ? U.fmtPct(U.pct(saving, total)) : '0%') + ')'),
@@ -393,7 +412,7 @@
   Fin.Views.accounts = {
     id: 'accounts',
     title: 'الحسابات',
-    icon: '🏦',
+    icon: 'bank',
     order: 4,
     subtitle: 'الأموال المجمّعة والادخار والمخطّط',
     render: render,

@@ -10,6 +10,23 @@
   var C = Fin.C, U = Fin.U, UI = Fin.UI, Store = Fin.Store, F = Fin.Finance;
   Fin.Views = Fin.Views || {};
 
+  /* أيقونة SVG احترافية من icons.js (بديل الإيموجي) */
+  function icon(name, opts) {
+    opts = opts || {};
+    if (!Fin.I) return U.el('span', { class: 'ic-wrap' });
+    var key = (name && Fin.I.has(name)) ? name : (opts.fallback || 'package');
+    return Fin.I.el(key, { size: opts.size || 20, tone: opts.tone || null });
+  }
+
+  /* حالة فراغ بأيقونة SVG (بنفس بنية UI.emptyState) */
+  function emptyBox(name, title, body) {
+    return U.el('div', { class: 'empty' }, [
+      U.el('div', { class: 'empty-ico' }, [icon(name, { size: 36 })]),
+      U.el('div', { class: 'empty-title', text: title || 'لا يوجد شيء بعد' }),
+      body ? U.el('div', { class: 'empty-body', text: body }) : null
+    ]);
+  }
+
   var filter = 'all';   // all | renew | expired | watch
   var query = '';
   var sortMode = 'expiry'; // expiry | name | price
@@ -30,7 +47,7 @@
     var crit = stats.byStatus.expired.concat(stats.byStatus.critical);
     if (!crit.length && !stats.byStatus.soon.length) {
       return U.el('div', { class: 'alert alert-info' }, [
-        U.el('div', { class: 'alert-ico', text: '✅' }),
+        U.el('div', { class: 'alert-ico' }, [icon('checkCircle', { size: 14 })]),
         U.el('div', { class: 'alert-main' }, [
           U.el('div', { class: 'alert-title', text: 'لا شيء عاجل الآن' }),
           U.el('div', { class: 'alert-body', text: 'أقرب نطاق للانتهاء: ' + (stats.next ? stats.next.domain + ' ' + stats.next.dueLabel : '—') })
@@ -39,7 +56,7 @@
     }
     var nearest = crit[0] || stats.byStatus.soon[0];
     return U.el('div', { class: 'alert alert-' + (crit.length ? 'danger' : 'warn') }, [
-      U.el('div', { class: 'alert-ico', text: crit.length ? '🔥' : '⏰' }),
+      U.el('div', { class: 'alert-ico' }, [icon(crit.length ? 'flame' : 'clock', { size: 14 })]),
       U.el('div', { class: 'alert-main' }, [
         U.el('div', { class: 'alert-title', text: crit.length
           ? (crit.length + ' نطاق يحتاج تجديداً فورياً')
@@ -52,10 +69,10 @@
 
   function summaryCards(stats) {
     return UI.statGrid([
-      UI.stat({ label: 'عدد النطاقات', value: String(stats.total), icon: '🌐', sub: 'لديك نحو 150 — أضف الباقي' }),
-      UI.stat({ label: 'تجديد فوري', value: String(stats.criticalCount), tone: stats.criticalCount ? 'warn' : null, icon: '🔥', valueClass: stats.criticalCount ? 'tx-expense' : '' }),
-      UI.stat({ label: 'تكلفة القريبة', value: U.fmtMoney(stats.renewNowCost), icon: '💳', sub: stats.renewNow.length + ' نطاقاً' }),
-      UI.stat({ label: 'التكلفة السنوية', value: U.fmtMoney(stats.yearCost), icon: '📅', sub: '~' + U.fmtMoney(stats.monthlyAvgCost) + ' شهرياً' })
+      UI.stat({ label: 'عدد النطاقات', value: String(stats.total), icon: 'globe', sub: 'لديك نحو 150 — أضف الباقي' }),
+      UI.stat({ label: 'تجديد فوري', value: String(stats.criticalCount), tone: stats.criticalCount ? 'warn' : null, icon: 'flame', valueClass: stats.criticalCount ? 'tx-expense' : '' }),
+      UI.stat({ label: 'تكلفة القريبة', value: U.fmtMoney(stats.renewNowCost), icon: 'creditCard', valueClass: 'tx-expense', sub: stats.renewNow.length + ' نطاقاً' }),
+      UI.stat({ label: 'التكلفة السنوية', value: U.fmtMoney(stats.yearCost), icon: 'calendar', valueClass: 'tx-expense', sub: '~' + U.fmtMoney(stats.monthlyAvgCost) + ' شهرياً' })
     ]);
   }
 
@@ -64,7 +81,7 @@
   function domainRow(d) {
     var tone = d.statusTone;
     return U.el('div', { class: 'domain-row domain-' + d.status }, [
-      U.el('div', { class: 'domain-ico', text: d.statusIcon }),
+      U.el('div', { class: 'domain-ico' }, [icon(d.statusIcon, { size: 20, fallback: 'globe' })]),
       U.el('div', { class: 'domain-main' }, [
         U.el('div', { class: 'domain-name', text: d.domain }),
         U.el('div', { class: 'domain-meta' }, [
@@ -83,7 +100,7 @@
           size: 'sm',
           onClick: function () { renewDialog(d); }
         }),
-        UI.iconBtn('✏️', 'تعديل', function () { editDialog(d); })
+        UI.iconBtn('edit', 'تعديل', function () { editDialog(d); })
       ])
     ]);
   }
@@ -295,7 +312,7 @@
   Fin.Views.domains = {
     id: 'domains',
     title: 'النطاقات',
-    icon: '🌐',
+    icon: 'globe',
     order: 6,
     subtitle: 'تجديدات وتذكيرات',
 
@@ -307,9 +324,10 @@
         alertBanner(stats),
         summaryCards(stats),
         U.el('div', { class: 'btn-row' }, [
-          UI.btn('＋ إضافة نطاق', { tone: 'primary', onClick: addDialog }),
-          UI.btn('📋 لصق قائمة كاملة', { tone: 'ghost', onClick: pasteDialog }),
+          UI.btn('إضافة نطاق', { icon: 'plus', tone: 'primary', onClick: addDialog }),
+          UI.btn('لصق قائمة كاملة', { icon: 'list', tone: 'ghost', onClick: pasteDialog }),
           UI.btn('تصدير CSV', {
+            icon: 'download',
             tone: 'ghost',
             onClick: function () {
               var rows = [['النطاق', 'الانتهاء', 'الأيام المتبقية', 'الحالة', 'السعر', 'ملاحظة']];
@@ -373,12 +391,14 @@
         ]),
         U.el('div', { class: 'form-inline' }, [searchInput, sortSelect]),
         UI.list(list, {
-          emptyIcon: '🌐',
-          emptyTitle: query ? 'لا نتائج للبحث' : 'لا نطاقات في هذه التصفية',
-          emptyBody: 'أضف نطاقاً من الزر في الأعلى',
+          empty: emptyBox(
+            'globe',
+            query ? 'لا نتائج للبحث' : 'لا نطاقات في هذه التصفية',
+            'أضف نطاقاً من الزر في الأعلى'
+          ),
           render: domainRow
         }),
-        filters.length ? U.el('div', { class: 'muted', text: stats.list.length + ' نطاقاً في القائمة · اضغط «✏️» لتعديل أي نطاق أو حذفه' }) : null
+        filters.length ? U.el('div', { class: 'muted', text: stats.list.length + ' نطاقاً في القائمة · اضغط «تعديل» لتعديل أي نطاق أو حذفه' }) : null
       ]));
 
       // توزيع الامتدادات
