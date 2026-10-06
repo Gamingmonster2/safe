@@ -240,8 +240,9 @@ eq('الحجرات غير متأخرة (يوم 5 أكتوبر)', recByLoc.rooms 
 check('الورشتان محصَّلتان اليوم (1,900 + 1,500 = 3,400)',
   F.chargePaid(state, 'c-2026-10-ws-paint') === 1900 && F.chargePaid(state, 'c-2026-10-ws-mech') === 1500,
   'paint=' + F.chargePaid(state, 'c-2026-10-ws-paint') + ' mech=' + F.chargePaid(state, 'c-2026-10-ws-mech'));
-eq('ديون عليّ = 5,180', F.debts(state).total, 5180);
-eq('التزامات قادمة = 1,500', U.round(F.obligations(state).total - F.obligations(state).debtTotal, 2), 1500);
+eq('لا ديون عليّ = 0', F.debts(state).total, 0);
+eq('مصروفات مخطّطة = 1,680', U.round(F.obligations(state).total, 2), 1680);
+eq('التزامات سنوية متبقية = 5,000', F.commitments(state).remainingTotal, 5000);
 
 /* ==========================================================================
  * 2) الأدوات (Tool calling)
@@ -284,8 +285,11 @@ eq('get_receivables → total 5,500', recTool.total, 5500);
 eq('get_receivables → متأخر 3,500', recTool.overdueTotal, 3500);
 
 const debtsTool = Agent.tools.get_debts.run(state, {});
-eq('get_debts → 5,180', debtsTool.debtsTotal, 5180);
-eq('get_debts → بعد السداد', debtsTool.afterPayingDebts, 4418);
+eq('get_debts → لا ديون (0)', debtsTool.debtsTotal, 0);
+eq('get_debts → hasDebts = false', debtsTool.hasDebts, false);
+eq('get_debts → المصروفات المخطّطة 1,680', debtsTool.plannedTotal, 1680);
+eq('get_debts → التزامات سنوية متبقية 5,000', debtsTool.annualRemainingTotal, 5000);
+eq('get_debts → بعد دفع المخطّط', debtsTool.afterPayingAll, 7918);
 
 const fc = Agent.tools.get_forecast.run(state, { days: 30 });
 check('get_forecast → رصيد افتتاحي 9,598 + متوقع > 0', fc.openingBalance === 9598 && fc.totalExpected > 0);
@@ -295,7 +299,7 @@ const alerts = Agent.tools.get_alerts.run(state, {});
 check('get_alerts → مصفوفة تنبيهات', Array.isArray(alerts.alerts) && alerts.alerts.length >= 2);
 
 const txTool = Agent.tools.list_transactions.run(state, { from: TODAY, to: TODAY });
-eq('list_transactions(today) → 9 حركات', txTool.count, 9);
+eq('list_transactions(today) → 7 حركات مدفوعة (2 دخل + 5 مصروف)', txTool.count, 7);
 
 const cmp = Agent.tools.compare_periods.run(state, {});
 eq('compare_periods → الفترة أ (هذا الشهر) 3,400', cmp.a.income, 3400);
@@ -342,7 +346,8 @@ const CASES = [
   { q: 'أكبر مصروف اليوم؟', must: ['120'], label: 'أكبر مصروف' },
   { q: 'كم مدخراتي؟', must: ['1,500'], label: 'المدخرات' },
   { q: 'كم الاستحقاقات؟', must: ['5,500', 'محصَّل'], label: 'الاستحقاقات' },
-  { q: 'عندي ديون؟', must: ['5,180'], label: 'الديون' },
+  { q: 'عندي ديون؟', must: ['لا ديون'], mustNot: ['5,180', '6,680'], label: 'الديون (لا ديون)' },
+  { q: 'ما هي مصروفاتي المخطّطة؟', must: ['1,680'], label: 'المصروفات المخطّطة' },
   { q: 'قارن هذا الشهر بالماضي', must: ['3,400'], label: 'المقارنة' },
   { q: 'توقع الشهر الجاي', must: ['المتوقع', '9,598'], label: 'التوقع' },
   { q: 'كم صرفت على ورشة السمكرة؟', must: ['1,900'], label: 'فلترة المكان: السمكرة' },
@@ -359,6 +364,7 @@ CASES.forEach((c) => {
   try { ans = Agent.localAnswer(c.q, state); } catch (e) { ans = 'THREW: ' + e.message; }
   check('سؤال «' + c.label + '» لا يرمي خطأ', typeof ans === 'string' && ans.indexOf('THREW') !== 0, String(ans).slice(0, 90));
   c.must.forEach((m) => has('«' + c.label + '» يذكر ' + m, ans, m));
+  (c.mustNot || []).forEach((m) => lacks('«' + c.label + '» لا يذكر ' + m, ans, m));
   ['undefined', 'NaN', '[object Object]'].forEach((bad) => lacks('«' + c.label + '» بلا ' + bad, ans, bad));
   check('«' + c.label + '» إجابة موجزة (1–14 سطراً)', ans.split('\n').length >= 1 && ans.split('\n').length <= 14, ans.split('\n').length + ' سطر');
 });

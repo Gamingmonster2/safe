@@ -167,14 +167,16 @@ near(
 );
 eq('عدد سندات اليوم = 2', C.RECEIPTS_TODAY.length, 2);
 
-near('إجمالي الالتزامات = 6,680', C.OBLIGATIONS_TOTAL, 6680);
-near('الديون (debt:true) = 5,180 (180 + 5,000)', C.OBLIGATIONS_DEBT_ONLY, 5180);
+near('إجمالي المصروفات المخطّطة = 1,680', C.OBLIGATIONS_TOTAL, 1680);
 near(
-  'الالتزامات القادمة (planned) = 1,500 (950 + 450 + 100)',
-  U.sum(C.OBLIGATIONS.filter((o) => !o.debt), (o) => o.amount),
-  1500
+  'المخطّط = نطاق .org 180 + كتب 950 + زي 450 + بنزين 100',
+  U.sum(C.OBLIGATIONS, (o) => o.amount),
+  1680
 );
-near('6,680 = 5,180 ديون + 1,500 قادمة', C.OBLIGATIONS_DEBT_ONLY + 1500, C.OBLIGATIONS_TOTAL);
+near('لا ديون في البذرة (كل البنود مخطّطة لا دين)', C.OBLIGATIONS.filter((o) => o.debt).length, 0);
+near('الالتزامات السنوية المتبقية = 5,000 (مدرسة: 6,000 − 1,000)', C.COMMITMENTS_REMAINING, 5000);
+near('الأموال المجمّعة في الصندوق = 8,098', C.FUND_SOURCES_TOTAL, 8098);
+near('رصيد الصندوق قبل اليوم = 5,000', C.FUND_OPENING, 5000);
 
 /* ================================== 2) أرقام البذرة المرجعية (الجدول الملزم) */
 
@@ -192,7 +194,7 @@ near('إجمالي الحسابات = 9,598', F.totalBalance(seed), 9598);
 near('هوية الرصيد: 5,000 + 3,400 − 302 = 8,098', C.OPENING.cash + day.income - day.expense, 8098);
 near('هوية الإجمالي: 8,098 + 1,500', F.cashBalance(seed) + F.savingsBalance(seed), 9598);
 
-eq('عدد معاملات البذرة = 12', seed.transactions.length, 12);
+eq('عدد معاملات البذرة = 11 (2 دخل + 5 مصروف + 4 مخطّط)', seed.transactions.length, 11);
 eq('عدد سندات القبض = 2', seed.receipts.length, 2);
 
 const oct = F.monthSummary(seed, '2026-10', C.TODAY);
@@ -282,34 +284,43 @@ const manualRec = U.sum(
 );
 near('مستحق لي (حساب يدوي من القاعدة) = مستحق لي (المحرّك)', manualRec, rec.total);
 
-/* ================================================= 4) الديون والالتزامات */
+/* ============================== 4) المصروفات المخطّطة والالتزامات السنوية */
 
-head('══ 4) الديون عليّ والالتزامات القادمة ══');
+head('══ 4) لا ديون — مصروفات مخطّطة + التزامات سنوية + أموال مجمّعة ══');
 
 const debts = F.debts(seed);
-near('ديون عليّ = 5,180', debts.total, 5180);
-eq('عدد الديون = 2', debts.count, 2);
+near('ديون عليّ = 0 (لا ديون في هذا التطبيق)', debts.total, 0);
+eq('عدد الديون = 0', debts.count, 0);
+eq('لا معاملة واحدة معلَّمة debt', seed.transactions.filter((t) => t.debt).length, 0);
+
 const domainTx = seed.transactions.find((t) => t.category === 'domain_hosting' && t.paid === false);
-const schoolTx = seed.transactions.find((t) => t.category === 'school_tuition' && t.paid === false);
-near('دين النطاق .org = 180', domainTx.amount, 180);
-near('دين بقية رسوم المدرسة = 5,000', schoolTx.amount, 5000);
-eq('دين النطاق معلَّم debt:true', domainTx.debt, true);
-eq('دين المدرسة معلَّم debt:true', schoolTx.debt, true);
-eq('دين النطاق غير مخطط', domainTx.planned, false);
+near('بطاقة النطاق .org = 180 (لم تُدفع)', domainTx.amount, 180);
+eq('النطاق مخطّط لا دين', domainTx.planned, true);
+near('لا توجد معاملة رسوم مدرسة معلّقة (خطة سنوية لا دين)', seed.transactions.filter((t) => t.category === 'school_tuition').length, 0);
 
 const oblig = F.obligations(seed);
-near('إجمالي الالتزامات = 6,680', oblig.total, 6680);
-near('منها ديون = 5,180', oblig.debtTotal, 5180);
-near('منها قادمة (planned) = 1,500', oblig.plannedTotal, 1500);
-near('الالتزامات الفورية (غير المخططة) = 5,180', oblig.immediateTotal, 5180);
-near('الفورية = الكلي − القادمة', oblig.immediateTotal, oblig.total - oblig.plannedTotal);
-near('5,180 + 1,500 = 6,680', oblig.debtTotal + oblig.plannedTotal, 6680);
+near('إجمالي المصروفات المخطّطة = 1,680', oblig.total, 1680);
+near('كلها مخطّطة (plannedTotal)', oblig.plannedTotal, 1680);
+near('لا مصروفات معلّقة غير مخطّطة', oblig.immediateTotal, 0);
 const plannedTxs = seed.transactions.filter((t) => t.planned === true);
-eq('عدد الالتزامات القادمة = 3 (كتب، زي، بنزين)', plannedTxs.length, 3);
-near('قادمة: كتب 950', plannedTxs.find((t) => t.category === 'school_books').amount, 950);
-near('قادمة: زي 450', plannedTxs.find((t) => t.category === 'clothes').amount, 450);
-near('قادمة: بنزين 100', plannedTxs.find((t) => t.category === 'fuel').amount, 100);
-near('لا أثر للالتزامات على الرصيد: 8,098 ثابتة', F.cashBalance(seed), 8098);
+eq('عدد المخطّط = 4 (نطاق، كتب، زي، بنزين)', plannedTxs.length, 4);
+near('مخطّط: كتب 950', plannedTxs.find((t) => t.category === 'school_books').amount, 950);
+near('مخطّط: زي 450', plannedTxs.find((t) => t.category === 'clothes').amount, 450);
+near('مخطّط: بنزين 100', plannedTxs.find((t) => t.category === 'fuel').amount, 100);
+near('لا أثر للمخطّط على الرصيد: 8,098 ثابتة', F.cashBalance(seed), 8098);
+
+const cm = F.commitments(seed);
+eq('التزام سنوي واحد (رسوم المدرسة)', cm.count, 1);
+near('رسوم المدرسة السنوية = 6,000', cm.list[0].annual, 6000);
+near('المدفوع منها = 1,000', cm.list[0].paidThisYear, 1000);
+near('المتبقي = 5,000', cm.remainingTotal, 5000);
+
+const funds = F.accumulatedFunds(seed);
+near('الأموال المجمّعة = النقد 8,098', funds.total, 8098);
+near('منها 5,000 كان قبل اليوم', funds.opening, 5000);
+near('إيرادات اليوم المحصَّلة = 3,400', funds.todayIncome, 3400);
+near('مصروفات اليوم = 302', funds.todayExpense, 302);
+near('مجموع المصادر = النقد', U.sum(funds.sources, (s) => s.amount), funds.total);
 
 /* ================================================= 5) حالات حدّية (معاملات) */
 
@@ -379,7 +390,7 @@ head('══ 5) حالات حدّية: تحصيل، سداد، مخطط، تحو
   near('تحصيل جزئي: المدفوع على الاستحقاق = 500', F.chargePaid(st, 'c-2026-Q4-studio-rent'), 500);
 }
 
-/* 5.3 سداد دين النطاق (180) عبر updateTransaction */
+/* 5.3 دفع بطاقة النطاق (180) عبر updateTransaction */
 {
   let st = fresh();
   const tx = st.transactions.find((t) => t.category === 'domain_hosting' && t.paid === false);
@@ -387,37 +398,33 @@ head('══ 5) حالات حدّية: تحصيل، سداد، مخطط، تحو
   const res = Store.updateTransaction(tx.id, { paid: true });
   st = Store.state;
 
-  check('سداد النطاق: updateTransaction أعاد المعاملة', !!res, res ? res.id : null, tx.id);
-  near('سداد النطاق: الرصيد نقص 180', beforeCash - F.cashBalance(st), 180);
-  near('سداد النطاق: الرصيد = 7,918', F.cashBalance(st), 7918);
-  near('سداد النطاق: الإجمالي = 9,418', F.totalBalance(st), 9418);
-  near('سداد النطاق: الديون أصبحت 5,000', F.debts(st).total, 5000);
-  near('سداد النطاق: عدد الديون = 1', F.debts(st).count, 1);
-  near('سداد النطاق: الالتزامات = 6,500', F.obligations(st).total, 6500);
-  eq('سداد النطاق: المعاملة صارت مدفوعة', chargeById(st, 'c-2026-10-shop-rent') ? true : true, true);
+  check('دفع النطاق: updateTransaction أعاد المعاملة', !!res, res ? res.id : null, tx.id);
+  near('دفع النطاق: الرصيد نقص 180', beforeCash - F.cashBalance(st), 180);
+  near('دفع النطاق: الرصيد = 7,918', F.cashBalance(st), 7918);
+  near('دفع النطاق: الإجمالي = 9,418', F.totalBalance(st), 9418);
+  near('دفع النطاق: الديون تبقى صفراً', F.debts(st).total, 0);
+  near('دفع النطاق: المخطّط نقص إلى 1,500', F.obligations(st).total, 1500);
   const after = st.transactions.find((t) => t.id === tx.id);
-  eq('سداد النطاق: paid = true', after.paid, true);
-  eq('سداد النطاق: نوعها ما زال expense', after.type, 'expense');
-  eq('سداد النطاق: لم تُحذف (12 معاملة)', st.transactions.length, 12);
+  eq('دفع النطاق: paid = true', after.paid, true);
+  eq('دفع النطاق: نوعها ما زال expense', after.type, 'expense');
+  eq('دفع النطاق: لم تُحذف (11 معاملة)', st.transactions.length, 11);
 }
 
-/* 5.4 مصروف «على الحساب» paid:false بلا debt */
+/* 5.4 مصروف «لم يُدفع» paid:false → مخطّط، لا يمسّ الرصيد ولا يُنشئ ديناً */
 {
   let st = fresh();
   const beforeTotal = F.totalBalance(st);
   const beforeRec = F.receivables(st, C.TODAY).total;
-  Store.addExpense({ amount: 250, category: 'other', paid: false, note: 'على الحساب — اختبار' });
+  Store.addExpense({ amount: 250, category: 'other', paid: false, planned: true, note: 'لم يُدفع — اختبار' });
   st = Store.state;
   const added = st.transactions[st.transactions.length - 1];
 
   near('مصروف غير مدفوع: الرصيد لا يتغيّر', F.totalBalance(st), beforeTotal);
   near('مصروف غير مدفوع: النقد يبقى 8,098', F.cashBalance(st), 8098);
-  near('مصروف غير مدفوع: يظهر في الالتزامات (6,930)', F.obligations(st).total, 6930);
-  /* immediateTotal = non-planned only: 5,180 (ديون البذرة) + 250 الجديد = 5,430 */
-  near('مصروف غير مدفوع: يدخل الالتزامات الفورية (5,430)', F.obligations(st).immediateTotal, 5430);
-  near('مصروف غير مدفوع: الفورية = 5,180 + 250', F.obligations(st).immediateTotal, 5180 + 250);
-  eq('مصروف غير مدفوع: ضمن بنود الالتزامات', F.obligations(st).items.some((t) => t.id === added.id), true);
-  near('مصروف غير مدفوع: الديون 5,430 (كل paid:false دين)', F.debts(st).total, 5430);
+  near('مصروف غير مدفوع: يظهر في المخطّط (1,930)', F.obligations(st).total, 1930);
+  near('مصروف غير مدفوع: لا ديون', F.debts(st).total, 0);
+  eq('مصروف غير مدفوع: ضمن بنود المخطّط', F.obligations(st).items.some((t) => t.id === added.id), true);
+  near('مصروف غير مدفوع: مجموع المخطّط = 1,680 + 250', F.obligations(st).total, 1680 + 250);
   near('مصروف غير مدفوع: لا يغيّر مستحق لي', F.receivables(st, C.TODAY).total, beforeRec);
 }
 
@@ -441,8 +448,8 @@ head('══ 5) حالات حدّية: تحصيل، سداد، مخطط، تحو
   Store.addTransaction({ type: 'expense', amount: 333, date: C.TODAY, category: 'other', planned: true, paid: false, note: 'مخطط غير مدفوع' });
   st = Store.state;
   near('مخطط+غير مدفوع: الرصيد لا يتغيّر', F.totalBalance(st), beforeTotal);
-  near('مخطط+غير مدفوع: يظهر في الالتزامات القادمة (1,833)', F.obligations(st).plannedTotal, 1833);
-  near('مخطط+غير مدفوع: الالتزامات الكلية 7,013', F.obligations(st).total, 7013);
+  near('مخطط+غير مدفوع: يظهر في المخطّط (1,680 + 333)', F.obligations(st).plannedTotal, 1680 + 333);
+  near('مخطط+غير مدفوع: مجموع المخطّط', F.obligations(st).total, 1680 + 333);
 }
 {
   let st = fresh();
@@ -548,6 +555,8 @@ noThrow('state فارغ لا يرمي (كل الدوال)', () => {
   F.topExpenses(empty, '2026-10-01', C.TODAY, 3);
   F.cashFlowForecast(empty, C.TODAY, 30);
   F.savingsStats(empty, '2026-10', C.TODAY);
+  F.accumulatedFunds(empty);
+  F.commitments(empty);
   F.dashboard(empty, C.TODAY);
   return true;
 });
@@ -555,7 +564,8 @@ noThrow('state فارغ لا يرمي (كل الدوال)', () => {
 const al = F.alerts(seed, C.TODAY);
 check('التنبيهات: مصفوفة غير فارغة', Array.isArray(al) && al.length > 0, al.length, '> 0');
 check('التنبيهات: تنبيه «مستحق لي 5,500» موجود', al.some((a) => String(a.title).includes('5,500')), al.map((a) => a.title), 'يحتوي 5,500');
-check('التنبيهات: تنبيه «ديون عليّ 5,180» موجود', al.some((a) => String(a.title).includes('5,180')), al.map((a) => a.title), 'يحتوي 5,180');
+check('التنبيهات: تنبيه «مصروفات مخطّطة 1,680» موجود', al.some((a) => String(a.title).includes('1,680')), al.map((a) => a.title), 'يحتوي 1,680');
+check('التنبيهات: لا يوجد أي تنبيه فيه كلمة «ديون عليّ»', !al.some((a) => /ديون عليّ/.test(String(a.title))), al.map((a) => a.title), 'لا ديون');
 
 /* ================================================ 7) التصدير والاستيراد */
 
@@ -571,7 +581,9 @@ head('══ 7) التصدير والاستيراد (ذهاب وعودة) ══
     receipts: st.receipts.length,
     charges: st.charges.length,
     rec: F.receivables(st, C.TODAY).total,
-    debts: F.debts(st).total
+    debts: F.debts(st).total,
+    planned: F.obligations(st).total,
+    funds: F.accumulatedFunds(st).total
   };
 
   const text = noThrow('exportJSON لا يرمي', () => Store.exportJSON());
@@ -598,9 +610,11 @@ head('══ 7) التصدير والاستيراد (ذهاب وعودة) ══
   eq('ذهاب وعودة: نفس عدد السندات', st.receipts.length, before.receipts);
   eq('ذهاب وعودة: نفس عدد الاستحقاقات', st.charges.length, before.charges);
   near('ذهاب وعودة: نفس مستحق لي', F.receivables(st, C.TODAY).total, before.rec);
-  near('ذهاب وعودة: نفس الديون', F.debts(st).total, before.debts);
+  near('ذهاب وعودة: نفس الديون (صفر)', F.debts(st).total, before.debts);
+  near('ذهاب وعودة: نفس المخطّط', F.obligations(st).total, before.planned);
+  near('ذهاب وعودة: نفس الأموال المجمّعة', F.accumulatedFunds(st).total, before.funds);
   near('ذهاب وعودة: نفس أرقام اليوم', F.daySummary(st, C.TODAY).net, 3098);
-  eq('ذهاب وعودة: لا يتضاعف عدد المعاملات', st.transactions.length, 12);
+  eq('ذهاب وعودة: لا يتضاعف عدد المعاملات', st.transactions.length, 11);
 
   const bad = noThrow('importJSON بنص تالف لا يرمي', () => Store.importJSON('{ هذا ليس JSON'));
   check('الاستيراد: يرفض النص التالف', !!(bad && bad.ok === false), bad && bad.ok, false);
@@ -692,8 +706,10 @@ if (bootResult) {
     near('الشاشة: الادخار 1,500', dash.saving, 1500);
     near('الشاشة: الإجمالي 9,598', dash.totalBalance, 9598);
     near('الشاشة: مستحق لي 5,500', dash.receivables.total, 5500);
-    near('الشاشة: ديون عليّ 5,180', dash.obligations.debtTotal, 5180);
-    near('الشاشة: التزامات قادمة 1,500', dash.obligations.plannedTotal, 1500);
+    near('الشاشة: لا ديون', dash.obligations.debtTotal === undefined ? 0 : dash.obligations.debtTotal, 0);
+    near('الشاشة: مصروفات مخطّطة 1,680', dash.obligations.total, 1680);
+    near('الشاشة: التزامات سنوية متبقية 5,000', dash.commitments.remainingTotal, 5000);
+    near('الشاشة: الأموال المجمّعة 8,098', dash.funds.total, 8098);
     near('الشاشة: إيراد الشهر 3,400', dash.month.income, 3400);
     near('الشاشة: مصروف الشهر 302', dash.month.expense, 302);
     eq('الشاشة: 30 يوماً في السلسلة', dash.series30.length, 30);

@@ -137,7 +137,7 @@
       id: tx.id, type: tx.type, date: tx.date, amount: Number(tx.amount) || 0,
       category: tx.category, categoryLabel: catOf(tx).label, label: tx.label || '',
       locationId: tx.locationId || null, accountId: tx.accountId || null,
-      paid: tx.paid !== false, planned: !!tx.planned, debt: !!tx.debt,
+      paid: tx.paid !== false, planned: !!tx.planned,
       note: String(tx.note || '').slice(0, 160), chargeId: tx.chargeId || null
     };
   }
@@ -261,19 +261,23 @@
     });
 
   T('get_debts',
-    'الديون عليّ (مصروفات paid:false) والالتزامات غير المسدَّدة، والإجمالي والمتبقي بعد السداد.',
+    'المصروفات المخطّطة التي لم تُدفع بعد (ليست ديوناً) + الالتزامات السنوية مثل رسوم المدرسة، والمتبقي من الرصيد.',
     {},
     {},
     function (st) {
-      var d = F.debts(st);
       var ob = F.obligations(st);
+      var cm = F.commitments ? F.commitments(st) : { list: [], remainingTotal: 0, annualTotal: 0, paidTotal: 0 };
       return {
-        debtsTotal: d.total, debtsCount: d.count,
-        debts: d.items.map(function (t) { return { label: t.label || catOf(t).label, amount: Number(t.amount) || 0, date: t.date, note: String(t.note || '').slice(0, 120), categoryLabel: catOf(t).label }; }),
-        obligationsTotal: ob.total, obligationsDebt: ob.debtTotal,
-        obligationsUpcoming: U.round(ob.total - ob.debtTotal, 2), obligationsCount: ob.count,
-        upcoming: ob.items.filter(function (t) { return !t.debt; }).map(function (t) { return { label: t.label || catOf(t).label, amount: Number(t.amount) || 0, planned: !!t.planned }; }),
-        afterPayingDebts: U.round(F.totalBalance(st) - ob.debtTotal, 2),
+        debtsTotal: 0,
+        debtsCount: 0,
+        hasDebts: false,
+        note: 'لا ديون على المستخدم — لا يوجد أي دين مسجّل في هذا التطبيق.',
+        plannedTotal: ob.total,
+        plannedCount: ob.count,
+        planned: ob.items.map(function (t) { return { label: t.label || catOf(t).label, amount: Number(t.amount) || 0, date: t.date, note: String(t.note || '').slice(0, 120), categoryLabel: catOf(t).label }; }),
+        annualCommitments: cm.list.map(function (c) { return { label: c.label, annual: c.annual, paid: c.paidThisYear, remaining: c.remaining, pct: c.pct }; }),
+        annualRemainingTotal: cm.remainingTotal,
+        afterPayingAll: U.round(F.totalBalance(st) - ob.total, 2),
         cashAfterAllObligations: U.round(F.cashBalance(st) - ob.total, 2)
       };
     });
@@ -426,7 +430,7 @@
     GREET: nz(['سلام', 'مرحبا', 'اهلا', 'هلا', 'صباح الخير', 'مساء الخير', 'شكرا', 'يعطيك', 'كيف حالك', 'من انت', 'شكون انت', 'ساعدني', 'مساعده', 'شن تقدر', 'شنهو تقدر', 'شنسوي']),
     RECV: nz(['لم احصل', 'ما حصلت', 'ماحصلت', 'غير محصل', 'مستحق', 'متاخر', 'ذمم', 'لم استلم', 'ما استلمت', 'ماحصلش', 'عليهم', 'يدفعون', 'لم يدفعوا', 'باقي عليهم', 'لم احصله', 'ما تحصّل', 'تحصيل متاخر', 'فلوس لي', 'لي عند']),
     CHARGES: nz(['استحقاق', 'ايجار', 'ايجارات', 'قوالب', 'الاستحقاقات', 'موعد الايجار']),
-    DEBT: nz(['دين', 'ديون', 'عليا دين', 'علي دين', 'التزام', 'التزامات', 'لازم ندفع', 'مطلوب مني', 'سلفه', 'سلفه عليا']),
+    DEBT: nz(['دين', 'ديون', 'عليا دين', 'علي دين', 'التزام', 'التزامات', 'مخطط', 'مخططة', 'مخططه', 'لم ادفع', 'لم ادفعه', 'ما دفعت', 'لازم ندفع', 'مطلوب مني', 'سلفه', 'سلفه عليا', 'رسوم المدرسه', 'المدرسه']),
     ADVICE: nz(['نصيح', 'انصحني', 'نصائح', 'كيف اوفر', 'اوفر', 'رايك', 'شن رايك', 'حلل', 'تحليل', 'من فضلك حلل', 'كيف احسن', 'خطه', 'وضعي المالي', 'مشوره', 'شن تنصح']),
     SAVE: nz(['ادخار', 'مدخرات', 'احتياطي', 'وفرت', 'توفير', 'مدخر', 'صندوق الطوارئ']),
     COMPARE: nz(['قارن', 'مقارنه', 'الفرق بين', 'مقابل', 'احسن من', 'افضل من', 'زياده عن']),
@@ -582,7 +586,7 @@
     var out = ['💵 رصيدك الآن: ' + money(total)];
     (st.accounts || []).forEach(function (acc) { out.push('• ' + (acc.icon || '•') + ' ' + acc.name + ': ' + money(b[acc.id])); });
     out.push('• اليوم: دخل ' + money(d.income) + ' — مصروف ' + money(d.expense) + ' — الصافي ' + money(d.net, { sign: true }));
-    out.push('• مستحق لي (غير محصَّل): ' + money(rec.total) + ' — ديون عليّ: ' + money(ob.debtTotal));
+    out.push('• مستحق لي (غير محصَّل): ' + money(rec.total) + ' — ولا ديون عليك ✅');
     if (c.q.indexOf('يكفي') >= 0 || c.q.indexOf('اكفي') >= 0) {
       var sv = F.savingsStats(st, U.monthKey(today()), today());
       if (sv.avgMonthlyExpense > 0) {
@@ -591,9 +595,9 @@
         out.push('• ما فيه معدل صرف مسجل بعد — رصيدك كامل متاح.');
       }
       if (rec.total > 0) out.push('• وتحصيل ' + money(rec.total) + ' المستحق يزيدك إلى ' + money(total + rec.total) + '.');
-      if (ob.debtTotal > 0) out.push('• بعد سداد ديونك ' + money(ob.debtTotal) + ' يبقى ' + money(total - ob.debtTotal) + '.');
-    } else if (ob.debtTotal > 0) {
-      out.push('• بعد سداد الديون يبقى ' + money(total - ob.debtTotal) + '.');
+      if (ob.total > 0) out.push('• وبعد دفع المخطّط (' + money(ob.total) + ') يبقى ' + money(total - ob.total) + '.');
+    } else if (ob.total > 0) {
+      out.push('• وبعد دفع المخطّط (' + money(ob.total) + ') يبقى ' + money(total - ob.total) + '.');
     }
     return out.join('\n');
   }
@@ -644,21 +648,21 @@
 
   function debtsAnswer(c) {
     var st = c.state;
-    var d = F.debts(st), ob = F.obligations(st);
-    var out = ['🧾 ديون عليّ: ' + money(d.total) + ' (' + d.count + ' بند)'];
-    if (d.items.length) {
-      d.items.slice(0, 6).forEach(function (t) { out.push('• ' + txLabel(t) + ': ' + money(t.amount) + (t.note ? ' — ' + String(t.note).slice(0, 70) : '')); });
+    var ob = F.obligations(st);
+    var cm = F.commitments ? F.commitments(st) : { list: [], remainingTotal: 0 };
+    var out = ['✅ لا ديون عليك — ما فيه أي دين مسجّل.'];
+    if (ob.items.length) {
+      out.push('📌 عندك مصروفات مخطّطة (لم تُدفع بعد، وليست ديوناً): ' + money(ob.total));
+      ob.items.slice(0, 6).forEach(function (t) { out.push('• ' + txLabel(t) + ': ' + money(t.amount) + (t.note ? ' — ' + String(t.note).slice(0, 70) : '')); });
     } else {
-      out.push('• ما فيه ديون مسجّلة.');
+      out.push('📌 ما فيه مصروفات معلّقة.');
     }
-    var upcoming = ob.items.filter(function (t) { return !t.debt; });
-    if (upcoming.length) {
-      out.push('• التزامات قادمة: ' + money(U.sum(upcoming, function (t) { return Number(t.amount) || 0; })) +
-        ' (' + upcoming.map(function (t) { return txLabel(t); }).join('، ') + ')');
+    if (cm.remainingTotal > 0) {
+      out.push('🏫 التزامات سنوية متبقية: ' + money(cm.remainingTotal) +
+        ' (' + cm.list.map(function (x) { return x.label + ' متبقٍ ' + money(x.remaining) + ' من ' + money(x.annual); }).join('، ') + ')');
     }
-    out.push('• بعد سداد كل الديون يبقى ' + money(F.totalBalance(st) - ob.debtTotal) + ' من رصيدك ' + money(F.totalBalance(st)) + '.');
-    var cashLeft = F.cashBalance(st) - ob.total;
-    out.push('• لو سدّدت كل الالتزامات (' + money(ob.total) + ') من النقد يبقى في الشنطة ' + money(cashLeft) + '.');
+    out.push('• النقد في الصندوق: ' + money(F.cashBalance(st)) + ' — إجمالي أموالك ' + money(F.totalBalance(st)) + '.');
+    if (ob.total > 0) out.push('• لو دفعت كل المخطّط (' + money(ob.total) + ') يبقى في الصندوق ' + money(F.cashBalance(st) - ob.total) + '.');
     return out.join('\n');
   }
 
@@ -681,6 +685,8 @@
     var cats = F.expenseByCategory(st, U.startOfMonth(today()), today());
     var rec = F.receivables(st, today());
     var ob = F.obligations(st);
+    var cmStat = F.commitments ? F.commitments(st) : { total: 0, remainingTotal: 0 };
+    var cm = { total: cmStat.remainingTotal || 0 };
     var cash = F.cashBalance(st), saving = F.savingsBalance(st), total = F.totalBalance(st);
     var out = [];
     var keyed = !!apiKey();
@@ -691,18 +697,19 @@
     if (ms.avgDailyExpense > 0) out.push('• معدل صرفك اليومي ' + money(ms.avgDailyExpense) + ' ≈ ' + money(U.round(ms.avgDailyExpense * 30, 2)) + ' بالشهر.');
     if (rec.total > 0) {
       out.push('• عندك ' + money(rec.total) + ' مستحق غير محصَّل' +
-        (ob.debtTotal > 0
-          ? (rec.total >= ob.debtTotal ? ' — يغطي ديونك ' + money(ob.debtTotal) + ' ويزيد ' + money(rec.total - ob.debtTotal) + '.'
-            : ' — يغطي ' + money(rec.total) + ' من ديونك ' + money(ob.debtTotal) + '، والباقي ' + money(ob.debtTotal - rec.total) + '.')
+        (ob.total > 0
+          ? (rec.total >= ob.total ? ' — يغطي مصروفاتك المخطّطة ' + money(ob.total) + ' ويزيد ' + money(rec.total - ob.total) + '.'
+            : ' — وبالمقابل عندك مصروفات مخطّطة ' + money(ob.total) + '، والباقي ' + money(ob.total - rec.total) + '.')
           : '.'));
     }
-    if (ob.debtTotal > 0 && cash > ob.debtTotal) {
-      out.push('• توصية: خصّص ' + money(ob.debtTotal) + ' من النقد لسداد الديون، وخلّي ' + money(saving) + ' احتياطي ما تلمسه.');
-    } else if (ob.debtTotal > 0) {
-      out.push('• توصية: سدّد الديون أول ما تحصّل ' + money(rec.total) + ' المستحق، لأن نقدك ' + money(cash) + ' أقل من ديونك ' + money(ob.debtTotal) + '.');
+    if (ob.total > 0 && cash > ob.total) {
+      out.push('• توصية: خصّص ' + money(ob.total) + ' من النقد للمصروفات المخطّطة، وخلّي ' + money(saving) + ' احتياطي ما تلمسه.');
+    } else if (ob.total > 0) {
+      out.push('• توصية: غطِّ المصروفات المخطّطة (' + money(ob.total) + ') أول ما تحصّل ' + money(rec.total) + ' المستحق، لأن نقدك ' + money(cash) + ' أقل منها.');
     } else {
       out.push('• توصية: حوّل 10% من كل تحصيل للادخار — رصيدك الحالي ' + money(total) + ' والادخار ' + money(saving) + '.');
     }
+    if (cm.total > 0) out.push('• التزامات سنوية متبقية: ' + money(cm.total) + '.');
     return out.join('\n');
   }
 
@@ -792,7 +799,7 @@
     var rec = F.receivables(st, today());
     var out = ['👋 أهلاً! أنا مساعدك المالي — أجاوب من أرقامك الفعلية' + (apiKey() ? '.' : ' (والمحرّك المحلي شغّال بلا إنترنت).')];
     out.push('• رصيدك الآن: ' + money(total) + ' — اليوم: دخل ' + money(d.income) + '، مصروف ' + money(d.expense) + '، الصافي ' + money(d.net, { sign: true }));
-    out.push('• مستحق لي: ' + money(rec.total) + ' — ديون عليّ: ' + money(F.obligations(st).debtTotal));
+    out.push('• مستحق لي: ' + money(rec.total) + ' — ولا ديون عليك ✅');
     out.push('جرّب: «كم صرفت اليوم؟» — «ما الذي لم أحصّله؟» — «وين راحت الفلوس؟» — «هل يكفي رصيدي؟»');
     return out.join('\n');
   }
@@ -806,7 +813,7 @@
     var out = [prefix || '🤔 ما فهمت السؤال بالضبط — هذا اللي عندي من أرقامك:'];
     out.push('• رصيدك: ' + money(total) + ' (نقد ' + money(b.cash || 0) + ' + ادخار ' + money(b.saving || 0) + ')');
     out.push('• اليوم: دخل ' + money(d.income) + ' — مصروف ' + money(d.expense) + ' — الصافي ' + money(d.net, { sign: true }));
-    out.push('• مستحق لي (غير محصَّل): ' + money(rec.total) + ' — ديون عليّ: ' + money(ob.debtTotal));
+    out.push('• مستحق لي (غير محصَّل): ' + money(rec.total) + ' — مصروفات مخطّطة: ' + money(ob.total) + ' (لا ديون عليك)');
     if (has(c.q, KW.ADVICE) && !apiKey()) out.push('ℹ️ التحليل الذكي يحتاج مفتاح DeepSeek من الإعدادات — أضفه وأحلّل لك بعمق.');
     out.push('اسألني: «كم صرفت اليوم؟» — «ما الذي لم أحصّله؟» — «ملخص هذا الشهر» — «قارن هذا الشهر بالماضي».');
     return out.join('\n');

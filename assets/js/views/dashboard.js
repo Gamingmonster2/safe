@@ -61,9 +61,9 @@
               note: v.note || '',
               method: v.unpaid ? 'credit' : 'cash',
               paid: !v.unpaid,
-              debt: !!v.unpaid
+              planned: !!v.unpaid
             });
-            UI.toast('أُضيف ' + cat.label + ' ' + U.fmtMoney(v.amount) + (v.unpaid ? ' (دين)' : ''), 'success');
+            UI.toast('أُضيف ' + cat.label + ' ' + U.fmtMoney(v.amount) + (v.unpaid ? ' (لم يُدفع بعد)' : ''), 'success');
             closeModal();
           }
         }
@@ -337,19 +337,19 @@
 
       var ob = F.obligations(state);
       if (ob.count) {
-        rootEl.appendChild(UI.section('التزامات لم تُسدَّد بعد', [
+        rootEl.appendChild(UI.section('مصروفات مخطّطة (ليست ديوناً)', [
           U.el('div', { class: 'summary-strip' }, [
             U.el('div', { class: 'summary-cell' }, [
-              U.el('div', { class: 'summary-label', text: 'ديون عليّ' }),
-              U.el('div', { class: 'summary-value tx-expense', text: U.fmtMoney(ob.debtTotal) })
+              U.el('div', { class: 'summary-label', text: 'لم تُدفع بعد' }),
+              U.el('div', { class: 'summary-value tx-warn', text: U.fmtMoney(ob.total) })
             ]),
             U.el('div', { class: 'summary-cell' }, [
-              U.el('div', { class: 'summary-label', text: 'قادمة' }),
-              U.el('div', { class: 'summary-value', text: U.fmtMoney(ob.plannedTotal) })
+              U.el('div', { class: 'summary-label', text: 'عدد البنود' }),
+              U.el('div', { class: 'summary-value', text: String(ob.count) })
             ]),
             U.el('div', { class: 'summary-cell' }, [
-              U.el('div', { class: 'summary-label', text: 'بعد السداد يبقى' }),
-              U.el('div', { class: 'summary-value' + (F.totalBalance(state) - ob.debtTotal < 0 ? ' tx-expense' : ''), text: U.fmtMoney(F.totalBalance(state) - ob.debtTotal) })
+              U.el('div', { class: 'summary-label', text: 'بعد دفعها يبقى' }),
+              U.el('div', { class: 'summary-value', text: U.fmtMoney(F.totalBalance(state) - ob.total) })
             ])
           ]),
           UI.list(ob.items.slice(0, 5), {
@@ -360,9 +360,30 @@
               });
             }
           }),
-          UI.btn('إدارة الالتزامات والديون', { tone: 'ghost', size: 'sm', onClick: function () { go('accounts'); } })
+          U.el('div', { class: 'muted', text: 'هذه مصروفات قادمة مخطّطة، وليست ديوناً — لا تُخصم من رصيدك حتى تدفعها.' }),
+          UI.btn('إدارة المصروفات المخطّطة', { tone: 'ghost', size: 'sm', onClick: function () { go('accounts'); } })
         ]));
       }
+
+      // الأموال المجمّعة (الصندوق)
+      var funds = F.accumulatedFunds(state);
+      rootEl.appendChild(UI.section('الأموال المجمّعة في الصندوق', [
+        U.el('div', { class: 'card' }, [
+          U.el('div', { class: 'card-head' }, [
+            U.el('span', { class: 'ico', text: '💵' }),
+            U.el('div', { class: 'card-title', text: 'النقد الموجود: ' + U.fmtMoney(funds.total) }),
+            U.el('div', { class: 'card-extra' }, [UI.badge('لا ديون', 'income')])
+          ]),
+          U.el('div', { class: 'card-body' }, [
+            UI.kv('كان في الصندوق قبل اليوم', U.fmtMoney(funds.opening)),
+            UI.kv('إيرادات اليوم المحصَّلة', U.fmtMoney(funds.todayIncome), { valueClass: 'tx-income' }),
+            UI.kv('مصروفات اليوم', U.fmtMoney(funds.todayExpense), { valueClass: 'tx-expense' }),
+            UI.kv('مدخرات محفوظة (منفصلة)', U.fmtMoney(funds.saving)),
+            UI.kv('الإجمالي', U.fmtMoney(funds.grandTotal), { valueClass: 'tx-income' })
+          ])
+        ]),
+        UI.btn('تفصيل الأرصدة', { tone: 'ghost', size: 'sm', onClick: function () { go('accounts'); } })
+      ]));
 
       var al = alertsSection(F.alerts(state, today));
       if (al) rootEl.appendChild(al);
@@ -459,7 +480,7 @@
             if (!v.amount || Number(v.amount) <= 0) { UI.toast('أدخل مبلغاً صحيحاً', 'danger'); return false; }
             Store.updateTransaction(tx.id, {
               amount: v.amount, category: v.category, date: v.date, note: v.note,
-              paid: !!v.paid, planned: v.paid ? false : tx.planned, debt: v.paid ? false : tx.debt,
+              paid: !!v.paid, planned: v.paid ? false : tx.planned,
               method: v.paid ? (tx.method === 'credit' ? 'cash' : tx.method) : 'credit'
             });
             UI.toast('تم الحفظ', 'success');

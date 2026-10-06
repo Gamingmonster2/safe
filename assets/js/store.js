@@ -59,13 +59,11 @@
       method: tx.method || 'cash',
       paid: tx.paid !== false,
       planned: !!tx.planned,
-      debt: !!tx.debt,
       note: tx.note || '',
       label: tx.label || '',
       tags: Array.isArray(tx.tags) ? tx.tags.slice() : [],
       createdAt: tx.createdAt || stamp(tx.date)
     };
-    if (out.type === 'income' && out.paid === false) out.debt = true; // دين لي
     return out;
   }
 
@@ -89,6 +87,9 @@
       locations: U.deepClone(C.LOCATIONS),
       templates: U.deepClone(C.TEMPLATES),
       domains: U.deepClone(C.DOMAINS),
+      fundOpening: C.FUND_OPENING,
+      fundSources: U.deepClone(C.FUND_SOURCES),
+      commitments: U.deepClone(C.COMMITMENTS),
       charges: [],
       transactions: [],
       receipts: [],
@@ -141,7 +142,7 @@
       }));
     });
 
-    // 4) الالتزامات غير المسدَّدة (لا تُخصم من الرصيد حتى السداد)
+    // 4) مصروفات مخطّطة/معلّقة (لا تُخصم من الرصيد حتى الدفع) — ليست ديوناً
     C.OBLIGATIONS.forEach(function (o) {
       st.transactions.push(clean({
         type: 'expense',
@@ -151,11 +152,10 @@
         accountId: 'cash',
         method: 'credit',
         paid: false,
-        planned: !o.debt,
-        debt: !!o.debt,
+        planned: true,
         label: o.label,
         note: o.note || '',
-        tags: ['التزام'],
+        tags: ['مصروف مخطط'],
         key: o.key
       }));
     });
@@ -167,7 +167,7 @@
         '• دخل ' + U.fmtMoney(C.RECEIVED_TODAY_TOTAL) + ' (' + C.RECEIVED_TODAY_LABEL + ')\n' +
         '• مصروف ' + U.fmtMoney(C.DAILY_EXPENSES_TOTAL) + ' (خضار، مواد غذائية، خبز، قهوة، تصريف مياه)\n' +
         '• صافي اليوم ' + U.fmtMoney(C.RECEIVED_TODAY_TOTAL - C.DAILY_EXPENSES_TOTAL, { sign: true }) + '\n' +
-        '• رصيد الشنطة ' + U.fmtMoney(C.OPENING.cash + C.RECEIVED_TODAY_TOTAL - C.DAILY_EXPENSES_TOTAL) + '\n' +
+        '• النقد في الصندوق ' + U.fmtMoney(C.OPENING.cash + C.RECEIVED_TODAY_TOTAL - C.DAILY_EXPENSES_TOTAL) + '\n' +
         'اسألني: كم صرفت هذا الأسبوع؟ ما الذي لم أحصّله؟ وين راحت الفلوس؟',
       at: stamp(today)
     }];
@@ -272,6 +272,15 @@
     st.templates = (st.templates && st.templates.length) ? st.templates : U.deepClone(C.TEMPLATES);
     // النسخ القديمة لا تحتوي نطاقات — نزرع القائمة الأولية مرة واحدة فقط
     st.domains = (st.domains && st.domains.length) ? st.domains : U.deepClone(C.DOMAINS);
+    // الأموال المجمّعة والالتزامات السنوية (خطط، لا ديون)
+    if (st.fundOpening === undefined) st.fundOpening = C.FUND_OPENING;
+    if (!st.fundSources || !st.fundSources.length) st.fundSources = U.deepClone(C.FUND_SOURCES);
+    if (!st.commitments || !st.commitments.length) st.commitments = U.deepClone(C.COMMITMENTS);
+    // ترقية: أي معاملة كانت معلَّمة «دين» تُصبح مصروفاً مخطّطاً (لا ديون في هذا التطبيق)
+    (st.transactions || []).forEach(function (tx) {
+      if (tx.debt) { tx.planned = true; }
+      delete tx.debt;
+    });
     // ترقية: نطاقات قديمة بلا معرّف لا يمكن تعديلها — نمنحها معرّفاً ثابتاً
     st.domains = st.domains.map(function (d, i) {
       if (!d.id) d.id = 'dm-' + U.hashCode(String(d.domain || '') + i) + '-' + (i + 1);
@@ -323,12 +332,16 @@
     if (opts.empty) {
       state = {
         version: C.SCHEMA_VERSION,
-        createdAt: new Date().toISOString(),
+        createdAt: C.TODAY + 'T12:00:00' + C.TZ_OFFSET,
+        seededAt: new Date().toISOString(),
         settings: { theme: (state && state.settings && state.settings.theme) || 'dark', currency: C.CURRENCY, locale: C.LOCALE, domain: '', agent: Object.assign({ provider: 'deepseek', model: 'deepseek-chat', apiKey: '', voice: false }, (state && state.settings && state.settings.agent) || {}) },
         accounts: U.deepClone(C.ACCOUNTS),
         locations: U.deepClone(C.LOCATIONS),
         templates: U.deepClone(C.TEMPLATES),
         domains: U.deepClone(C.DOMAINS),
+        fundOpening: C.FUND_OPENING,
+        fundSources: U.deepClone(C.FUND_SOURCES),
+        commitments: U.deepClone(C.COMMITMENTS),
         charges: [], transactions: [], receipts: [], agentChat: []
       };
     } else {
@@ -359,7 +372,12 @@
     var idx = -1;
     state.transactions.forEach(function (t, i) { if (t.id === id) idx = i; });
     if (idx < 0) return null;
-    var merged = clean(Object.assign({}, state.transactions[idx], patch, { id: id }));
+    var current = state.transactions[idx];
+    var p = Object.assign({}, patch);
+    // اتساق الحالة: الدفع يعني أنه لم يعد مخطّطاً (وإلا لن يُخصم من الرصيد أبداً)
+    if (p.paid === true) p.planned = false;
+    if (p.planned === true && p.paid === undefined) p.paid = false;
+    var merged = clean(Object.assign({}, current, p, { id: id }));
     state.transactions[idx] = merged;
     touch('update-transaction', { transaction: merged });
     return merged;
@@ -564,14 +582,14 @@
   };
 
   S.exportCSV = function () {
-    var rows = [['النوع', 'التاريخ', 'المبلغ', 'الفئة', 'الحساب', 'المكان', 'مدفوع', 'مخطط', 'دين', 'ملاحظة']];
+    var rows = [['النوع', 'التاريخ', 'المبلغ', 'الفئة', 'الحساب', 'المكان', 'مدفوع', 'مخطط', 'ملاحظة']];
     state.transactions.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; }).forEach(function (t) {
       var cat = t.type === 'income' ? C.catIncome(t.category) : C.catExpense(t.category);
       var loc = C.location(t.locationId);
       rows.push([
         t.type === 'income' ? 'دخل' : (t.type === 'expense' ? 'مصروف' : 'تحويل'),
         t.date, t.amount, cat.label, t.accountId, loc ? loc.name : '',
-        t.paid === false ? 'لا' : 'نعم', t.planned ? 'نعم' : 'لا', t.debt ? 'نعم' : 'لا',
+        t.paid === false ? 'لا' : 'نعم', t.planned ? 'نعم' : 'لا',
         (t.label ? t.label + ' — ' : '') + (t.note || '')
       ]);
     });
@@ -611,12 +629,16 @@
     var domains = state.domains;
     state = {
       version: C.SCHEMA_VERSION,
-      createdAt: new Date().toISOString(),
+      createdAt: C.TODAY + 'T12:00:00' + C.TZ_OFFSET,
+      seededAt: new Date().toISOString(),
       settings: settings || state.settings,
       accounts: accounts || U.deepClone(C.ACCOUNTS),
       locations: locations,
       templates: templates,
       domains: domains || U.deepClone(C.DOMAINS),
+      fundOpening: state.fundOpening !== undefined ? state.fundOpening : C.FUND_OPENING,
+      fundSources: state.fundSources || U.deepClone(C.FUND_SOURCES),
+      commitments: state.commitments || U.deepClone(C.COMMITMENTS),
       charges: [], transactions: [], receipts: [], agentChat: []
     };
     S.save(true);
@@ -734,7 +756,6 @@
         accountId: opts.accountId || 'cash',
         method: opts.method || 'cash',
         paid: opts.paid !== false,
-        debt: opts.paid === false,
         label: 'تجديد نطاق ' + d.domain + (years > 1 ? ' (' + years + ' سنوات)' : ''),
         note: opts.note || ('من ' + U.dateLabel(d.expiry, 'short') + ' إلى ' + U.dateLabel(newExpiry, 'short')),
         tags: ['نطاق', 'تجديد']

@@ -60,26 +60,25 @@
     });
   }
 
-  /* =============================================== نافذة سداد التزام/دين */
+  /* =============================================== نافذة دفع مصروف مخطّط */
 
   function openPayModal(tx, ctx) {
-    var isDebt = !!tx.debt;
     var form = UI.form([
-      { name: 'date', label: 'تاريخ السداد', type: 'date', required: true },
+      { name: 'date', label: 'تاريخ الدفع', type: 'date', required: true },
       { name: 'accountId', label: 'من حساب', type: 'select', options: (ctx.state.accounts || []).map(function (a) { return { value: a.id, label: a.name }; }) },
       { name: 'note', label: 'ملاحظة', type: 'text', span: 2, placeholder: 'اختياري' }
     ], { values: { date: ctx.asOf || U.todayISO(), accountId: tx.accountId || 'cash', note: tx.note || '' } });
 
     UI.modal({
-      title: 'تسجيل سداد: ' + (tx.label || C.catExpense(tx.category).label),
+      title: 'تسجيل دفع: ' + (tx.label || C.catExpense(tx.category).label),
       body: U.el('div', {}, [
         U.el('div', { class: 'alert alert-warn' }, [
           U.el('div', { class: 'alert-ico', text: '💳' }),
           U.el('div', { class: 'alert-main' }, [
             U.el('div', { class: 'alert-title', text: 'سيُخصم ' + U.fmtMoney(tx.amount) + ' من الرصيد' }),
             U.el('div', { class: 'alert-body' }, [
-              U.el('span', { text: 'قبل السداد: ' + U.fmtMoney(F.totalBalance(ctx.state)) + ' — بعده: ' + U.fmtMoney(U.round(F.totalBalance(ctx.state) - (Number(tx.amount) || 0))) + '. ' }),
-              U.el('span', { text: isDebt ? 'هذا دين عليك، وسيختفي من قائمة الديون بعد السداد.' : 'هذا التزام قادم (لم يكن محسوباً في الرصيد).' })
+              U.el('span', { text: 'قبل الدفع: ' + U.fmtMoney(F.totalBalance(ctx.state)) + ' — بعده: ' + U.fmtMoney(U.round(F.totalBalance(ctx.state) - (Number(tx.amount) || 0))) + '. ' }),
+              U.el('span', { text: 'هذا مصروف مخطّط لم يُدفع بعد (ليس ديناً)، وسيختفي من القائمة بعد الدفع.' })
             ])
           ])
         ]),
@@ -88,20 +87,19 @@
       wide: true,
       actions: [
         { label: 'إلغاء', tone: 'ghost' },
-        { label: 'سدّدت', tone: 'success', type: 'submit' }
+        { label: 'دفعت', tone: 'success', type: 'submit' }
       ],
       onSubmit: function () {
         var v = form.getValues();
         Store.updateTransaction(tx.id, {
           paid: true,
           planned: false,
-          debt: false,
           date: v.date || tx.date,
           accountId: v.accountId || tx.accountId,
           method: 'cash',
           note: v.note || tx.note
         });
-        UI.toast('تم تسجيل سداد ' + U.fmtMoney(tx.amount), 'success');
+        UI.toast('تم تسجيل دفع ' + U.fmtMoney(tx.amount), 'success');
         return { ok: true };
       }
     });
@@ -199,12 +197,11 @@
     var sav = F.savingsStats(state, U.monthKey(asOf), asOf);
     var rec = F.receivables(state, asOf);
     var ob = F.obligations(state);
-    var debts = ob.items.filter(function (t) { return t.debt; });
-    var planned = ob.items.filter(function (t) { return !t.debt; });
-    /* ملاحظة: F.obligations.plannedTotal يجمع بنود debt فقط (لأن البذرة تضبط planned:true عليها)،
-       فالصحيح للالتزامات القادمة = الإجمالي − الديون. */
-    var plannedTotal = U.round(ob.total - ob.debtTotal);
-    var netWealth = U.round(total - ob.debtTotal + rec.total);
+    var funds = F.accumulatedFunds(state);
+    var cm = F.commitments(state);
+    var planned = ob.items;
+    var plannedTotal = U.round(ob.total);
+    var netWealth = U.round(total + rec.total);
 
     /* ================================================ 1) بطاقات الحسابات */
     var accCards = (state.accounts || []).map(function (acc) {
@@ -228,8 +225,8 @@
 
     rootEl.appendChild(UI.section('الحسابات', [
       U.el('div', { class: 'stat-grid' }, [
-        UI.stat({ icon: '🧮', label: 'إجمالي الثروة', tone: 'primary', value: U.fmtMoney(total), sub: (state.accounts || []).length + ' حساب · نقد + ادخار' }),
-        UI.stat({ icon: '💵', label: 'نقد (الشنطة)', value: U.fmtMoney(cash), sub: total > 0 ? U.fmtPct(U.pct(cash, total)) + ' من الإجمالي' : '' }),
+        UI.stat({ icon: '🧮', label: 'إجمالي الأموال', tone: 'primary', value: U.fmtMoney(total), sub: (state.accounts || []).length + ' حساب · نقد + ادخار' }),
+        UI.stat({ icon: '💵', label: 'النقد (الصندوق)', value: U.fmtMoney(cash), sub: total > 0 ? U.fmtPct(U.pct(cash, total)) + ' من الإجمالي' : '' }),
         UI.stat({ icon: '🏦', label: 'ادخار', tone: 'warn', value: U.fmtMoney(saving), sub: total > 0 ? U.fmtPct(U.pct(saving, total)) + ' من الإجمالي' : '' }),
         UI.stat({ icon: '📊', label: 'نسبة الادخار هذا الشهر', tone: sav.rate >= 0 ? 'income' : 'expense', value: U.fmtPct(sav.rate), sub: 'صافي ' + U.fmtMoney(sav.net, { sign: true }) + ' من دخل ' + U.fmtMoney(sav.income) })
       ]),
@@ -237,31 +234,39 @@
       UI.btn('＋ حساب جديد', { tone: 'ghost', className: 'btn-block', onClick: function () { openAddAccountModal(ctx); } })
     ]));
 
-    /* ================================== 2) الديون والالتزامات */
-    var debtRows = debts.map(function (tx) {
+    /* ============================== 2) الأموال المجمّعة (من أين جاء النقد) */
+    var fundRows = funds.sources.map(function (s) {
       return U.el('div', { class: 'list-item' }, [
-        U.el('span', { class: 'ico', text: (C.catExpense(tx.category) || {}).icon || '🧾' }),
+        U.el('span', { class: 'ico', text: s.amount >= 0 ? '➕' : '➖' }),
         U.el('div', { class: 'tx-main' }, [
-          U.el('div', { class: 'tx-title', text: tx.label || C.catExpense(tx.category).label }),
+          U.el('div', { class: 'tx-title', text: s.label }),
           U.el('div', { class: 'tx-meta' }, [
-            U.el('span', { text: U.dateLabel(tx.date, 'short') }),
-            tx.note ? U.el('span', { text: ' · ' + tx.note }) : null
-          ]),
-          U.el('div', { class: 'tx-flags' }, [
-            UI.badge('دين عليّ', 'danger'),
-            tx.method === 'credit' ? UI.badge('على الحساب', 'muted') : null
+            U.el('span', { text: s.note || '' }),
+            s.fromToday ? U.el('span', { class: 'tx-note', text: ' · اليوم' }) : null
           ])
         ]),
-        U.el('div', { class: 'tx-amount tx-expense', text: U.fmtMoney(tx.amount) }),
-        U.el('div', { class: 'tx-actions' }, [
-          U.el('button', {
-            type: 'button', class: 'btn btn-sm btn-success', text: 'سدّدت',
-            onClick: function () { openPayModal(tx, ctx); }
-          })
-        ])
+        U.el('div', { class: 'tx-amount ' + (s.amount >= 0 ? 'tx-income' : 'tx-expense'), text: U.fmtMoney(s.amount, { sign: true }) })
       ]);
     });
 
+    rootEl.appendChild(UI.section('الأموال المجمّعة في الصندوق', [
+      U.el('div', { class: 'stat-grid' }, [
+        UI.stat({ icon: '💰', label: 'النقد الآن', tone: 'income', value: U.fmtMoney(funds.total), sub: 'في الصندوق' }),
+        UI.stat({ icon: '🕰️', label: 'كان قبل اليوم', value: U.fmtMoney(funds.opening), sub: funds.openingNote }),
+        UI.stat({ icon: '📥', label: 'دخل اليوم', tone: 'income', value: U.fmtMoney(funds.todayIncome), sub: 'إيجارات محصَّلة' }),
+        UI.stat({ icon: '📤', label: 'مصروف اليوم', tone: 'expense', value: U.fmtMoney(funds.todayExpense), sub: 'خضار ومواد وخبز وقهوة' })
+      ]),
+      UI.card({ title: 'من أين جاء النقد الموجود', icon: '🧭', body: U.el('div', { class: 'list' }, fundRows) }),
+      U.el('div', { class: 'alert alert-info' }, [
+        U.el('div', { class: 'alert-ico', text: '✅' }),
+        U.el('div', { class: 'alert-main' }, [
+          U.el('div', { class: 'alert-title', text: 'لا ديون عليك' }),
+          U.el('div', { class: 'alert-body', text: 'كل ما في الصندوق أموال مجمّعة من إيراداتك. المصروفات المخطّطة أدناه لم تُدفع بعد، ولا تُخصم من الرصيد إلا عند الدفع.' })
+        ])
+      ])
+    ]));
+
+    /* ============================== 3) المصروفات المخطّطة (ليست ديوناً) */
     var plannedRows = planned.map(function (tx) {
       return U.el('div', { class: 'list-item' }, [
         U.el('span', { class: 'ico', text: (C.catExpense(tx.category) || {}).icon || '📌' }),
@@ -271,35 +276,55 @@
             U.el('span', { text: 'متوقّع ' + U.dateLabel(tx.date, 'short') }),
             tx.note ? U.el('span', { text: ' · ' + tx.note }) : null
           ]),
-          U.el('div', { class: 'tx-flags' }, [UI.badge('التزام قادم', 'warn')])
+          U.el('div', { class: 'tx-flags' }, [UI.badge('لم يُدفع', 'warn')])
         ]),
         U.el('div', { class: 'tx-amount', text: U.fmtMoney(tx.amount) }),
         U.el('div', { class: 'tx-actions' }, [
           U.el('button', {
-            type: 'button', class: 'btn btn-sm btn-ghost', text: 'سدّدت',
+            type: 'button', class: 'btn btn-sm btn-success', text: 'دفعت',
             onClick: function () { openPayModal(tx, ctx); }
           })
         ])
       ]);
     });
 
-    rootEl.appendChild(UI.section('الديون والالتزامات', [
+    rootEl.appendChild(UI.section('مصروفات مخطّطة — ليست ديوناً', [
       U.el('div', { class: 'stat-grid' }, [
-        UI.stat({ icon: '🧾', label: 'ديون عليّ', tone: 'expense', value: U.fmtMoney(ob.debtTotal), sub: debts.length + ' بند — تُخصم من الرصيد عند السداد' }),
-        UI.stat({ icon: '📌', label: 'التزامات قادمة', tone: 'warn', value: U.fmtMoney(plannedTotal), sub: planned.length + ' بند — غير محسوبة في الرصيد' }),
-        UI.stat({ icon: 'Σ', label: 'إجمالي المطلوب', tone: 'primary', value: U.fmtMoney(ob.total), sub: 'المتبقي بعد كل السداد: ' + U.fmtMoney(U.round(total - ob.total)) })
+        UI.stat({ icon: '📌', label: 'لم تُدفع بعد', tone: 'warn', value: U.fmtMoney(plannedTotal), sub: planned.length + ' بند — غير محسوبة في الرصيد' }),
+        UI.stat({ icon: '💵', label: 'يكفيها من النقد؟', tone: cash >= plannedTotal ? 'income' : 'expense', value: cash >= plannedTotal ? 'نعم' : 'لا', sub: 'النقد ' + U.fmtMoney(cash) + ' مقابل ' + U.fmtMoney(plannedTotal) }),
+        UI.stat({ icon: 'Σ', label: 'المتبقي بعد دفعها', value: U.fmtMoney(U.round(total - plannedTotal)), sub: 'من إجمالي ' + U.fmtMoney(total) })
       ]),
-      debts.length ? UI.card({ title: 'ديون عليّ (' + U.fmtMoney(ob.debtTotal) + ')', icon: '⚠️', tone: 'expense', body: U.el('div', { class: 'list' }, debtRows) }) : null,
-      planned.length ? UI.card({ title: 'التزامات قادمة (' + U.fmtMoney(plannedTotal) + ')', icon: '📌', tone: 'warn', body: U.el('div', { class: 'list' }, plannedRows) }) : null,
-      !ob.items.length ? UI.emptyState('✅', 'لا ديون ولا التزامات', 'كل شيء مسدَّد.') : null,
-      U.el('div', { class: 'alert alert-info' }, [
-        U.el('div', { class: 'alert-ico', text: 'ℹ️' }),
-        U.el('div', { class: 'alert-main' }, [
-          U.el('div', { class: 'alert-title', text: 'الديون تُخصم من الرصيد عند السداد فقط' }),
-          U.el('div', { class: 'alert-body', text: 'زر «سدّدت» يحوّل البند إلى مصروف مدفوع فيُخصم فوراً من الحساب. الالتزامات القادمة (كتب، زي، بنزين) لا تُخصم حتى تسدّدها.' })
-        ])
-      ])
+      planned.length ? UI.card({ title: 'المخطّط (' + U.fmtMoney(plannedTotal) + ')', icon: '📌', tone: 'warn', body: U.el('div', { class: 'list' }, plannedRows) }) : UI.emptyState('✅', 'لا مصروفات معلّقة', 'كل شيء مدفوع.')
     ]));
+
+    /* ============================== 4) الالتزامات السنوية (خطط سنوية) */
+    if (cm.count) {
+      var commitCards = cm.list.map(function (c) {
+        return U.el('div', { class: 'card' }, [
+          U.el('div', { class: 'card-head' }, [
+            U.el('span', { class: 'ico', text: c.icon || '📅' }),
+            U.el('div', { class: 'card-title', text: c.label }),
+            U.el('div', { class: 'card-extra' }, [UI.badge('سنوي', 'info')])
+          ]),
+          U.el('div', { class: 'card-body' }, [
+            UI.kv('التكلفة السنوية', U.fmtMoney(c.annual)),
+            UI.kv('المدفوع هذا العام', U.fmtMoney(c.paidThisYear), { valueClass: 'tx-income' }),
+            UI.kv('المتبقي', U.fmtMoney(c.remaining), { valueClass: 'tx-warn' }),
+            UI.progress(c.pct),
+            U.el('div', { class: 'card-sub', text: 'أُنجز ' + U.fmtPct(c.pct) + ' — ' + (c.note || '') })
+          ])
+        ]);
+      });
+      rootEl.appendChild(UI.section('التزامات سنوية (خطط)', [
+        U.el('div', { class: 'stat-grid' }, [
+          UI.stat({ icon: '📅', label: 'إجمالي السنوي', value: U.fmtMoney(cm.annualTotal), sub: cm.count + ' التزام' }),
+          UI.stat({ icon: '✅', label: 'المدفوع', tone: 'income', value: U.fmtMoney(cm.paidTotal) }),
+          UI.stat({ icon: '⏳', label: 'المتبقي', tone: 'warn', value: U.fmtMoney(cm.remainingTotal), sub: 'يُسدَّد على دفعات خلال السنة' })
+        ]),
+        U.el('div', { class: 'stat-grid' }, commitCards),
+        U.el('div', { class: 'muted', text: 'هذه خطط سنوية وليست ديوناً — التطبيق يعرضها للمتابعة فقط.' })
+      ]));
+    }
 
     /* =================================================== 3) الادخار */
     var monthsText = sav.monthsCovered > 0 ? U.fmtNumber(sav.monthsCovered, 1) + ' شهر' : '—';
@@ -327,40 +352,40 @@
       ])
     ]));
 
-    /* ============================================== 4) صافي الثروة */
+    /* ============================================== 5) صافي الموجود */
     var netCard = UI.card({
-      title: 'صافي الثروة',
+      title: 'صافي الموجود',
       icon: '⚖️',
-      tone: netWealth >= 0 ? 'income' : 'expense',
+      tone: 'income',
       value: U.fmtMoney(netWealth),
-      sub: 'إجمالي الحسابات − ديون عليّ + مستحق لي',
+      sub: 'ما عندك فعلاً + ما سيصلك من إيجارات',
       body: U.el('div', {}, [
-        UI.kv('إجمالي الحسابات (نقد + ادخار)', U.fmtMoney(total)),
-        UI.kv('− ديون عليّ', U.fmtMoney(ob.debtTotal), { valueClass: 'tx-expense' }),
+        UI.kv('أموال في اليد (نقد + ادخار)', U.fmtMoney(total), { valueClass: 'tx-income' }),
         UI.kv('+ مستحق لي ولم يُحصَّل', U.fmtMoney(rec.total), { valueClass: 'tx-income' }),
         U.el('hr', { class: 'divider' }),
-        UI.kv('= صافي الثروة', U.fmtMoney(netWealth), { valueClass: netWealth >= 0 ? 'tx-income' : 'tx-expense' }),
+        UI.kv('= صافي الموجود', U.fmtMoney(netWealth), { valueClass: 'tx-income' }),
         U.el('div', { class: 'card-sub' }, [
-          U.el('span', { text: 'لو حصّلت كل المستحق وسدّدت كل الديون يصبح النقد ' + U.fmtMoney(U.round(total + rec.total - ob.debtTotal)) + '.' })
+          U.el('span', { text: 'لو حصّلت كل الإيجارات المستحقة يصبح لديك ' + U.fmtMoney(U.round(total + rec.total)) + ' (قبل المصروفات المخطّطة).' })
         ])
       ])
     });
 
     var compCard = UI.card({
-      title: 'من أين تتكوّن ثروتك',
+      title: 'من أين تتكوّن أموالك',
       icon: '🧭',
       body: U.el('div', {}, [
-        UI.kv('نقد', U.fmtMoney(cash) + ' (' + (total > 0 ? U.fmtPct(U.pct(cash, total)) : '0%') + ')'),
+        UI.kv('نقد في الصندوق', U.fmtMoney(cash) + ' (' + (total > 0 ? U.fmtPct(U.pct(cash, total)) : '0%') + ')'),
         UI.kv('ادخار', U.fmtMoney(saving) + ' (' + (total > 0 ? U.fmtPct(U.pct(saving, total)) : '0%') + ')'),
         UI.kv('مستحق لي', U.fmtMoney(rec.total) + ' (' + rec.count + ' استحقاق)'),
-        UI.kv('ديون عليّ', U.fmtMoney(ob.debtTotal) + ' (' + debts.length + ' بند)', { valueClass: 'tx-expense' }),
+        UI.kv('مصروفات مخطّطة', U.fmtMoney(plannedTotal) + ' (' + planned.length + ' بند)', { valueClass: 'tx-warn' }),
+        UI.kv('التزامات سنوية متبقية', U.fmtMoney(cm.remainingTotal), { valueClass: 'tx-warn' }),
         U.el('div', { class: 'card-sub' }, [
-          U.el('span', { text: 'التزامات قادمة (غير محسوبة): ' + U.fmtMoney(plannedTotal) + ' على ' + planned.length + ' بند.' })
+          U.el('span', { text: 'لا ديون عليك — المخطّط والسنوي لا يُخصمان من رصيدك حتى تدفعهما.' })
         ])
       ])
     });
 
-    rootEl.appendChild(UI.section('صافي الثروة', [
+    rootEl.appendChild(UI.section('صافي الموجود', [
       U.el('div', { class: 'stat-grid' }, [netCard, compCard])
     ]));
   }
@@ -370,7 +395,7 @@
     title: 'الحسابات',
     icon: '🏦',
     order: 4,
-    subtitle: 'الرصيد والديون والادخار',
+    subtitle: 'الأموال المجمّعة والادخار والمخطّط',
     render: render,
     destroy: function () {}
   };

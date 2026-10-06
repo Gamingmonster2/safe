@@ -210,9 +210,13 @@ eq('رصيد الشاشة', F.balanceOf(st, 'cash'), 8098);
 eq('رصيد الادخار', F.balanceOf(st, 'saving'), 1500);
 eq('إجمالي الحسابات', F.totalBalance(st), 9598);
 eq('مستحق لي (غير محصَّل)', F.receivables(st, TODAY).total, 5500);
-eq('ديون عليّ', F.obligations(st).debtTotal, 5180);
-eq('التزامات قادمة', F.obligations(st).plannedTotal, 1500);
-eq('إجمالي الالتزامات', F.obligations(st).total, 6680);
+eq('لا ديون عليّ', F.obligations(st).total === 0 ? 0 : F.debts(st).total, 0);
+eq('مصروفات مخطّطة', F.obligations(st).total, 1680);
+eq('التزامات سنوية متبقية', F.commitments(st).remainingTotal, 5000);
+eq('الأموال المجمّعة', F.accumulatedFunds(st).total, 8098);
+eq('رصيد الصندوق قبل اليوم', F.accumulatedFunds(st).opening, 5000);
+eq('التزامات قادمة (مخطّطة)', F.obligations(st).plannedTotal, 1680);
+eq('إجمالي المصروفات المخطّطة', F.obligations(st).total, 1680);
 
 console.log('\n=== 3ب) النطاقات (القائمة التي أدخلها المستخدم) ===');
 const dom = F.domainStats(st, TODAY);
@@ -242,7 +246,7 @@ const expected = {
   dashboard: ['3,098', '8,098', '5,500', '302', 'toolseer.com'],
   expenses: ['302'],
   income: ['5,500', '3,400'],
-  accounts: ['8,098', '1,500', '5,180'],
+  accounts: ['8,098', '1,500', '1,680'],
   reports: ['3,400'],
   domains: ['toolseer.com', '450', 'html.com.ly'],
   settings: ['مصروفي'],

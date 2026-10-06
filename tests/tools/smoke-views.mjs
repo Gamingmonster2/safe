@@ -117,18 +117,14 @@ eq('لا يوجد استحقاق للاستوديو قبل الربع الراب
 
 /* ------------------------------------------------------- الديون والالتزامات */
 
-section('3) الديون والالتزامات');
+section('3) المصروفات المخطّطة (لا ديون)');
 const ob = F.obligations(state);
-eqMoney('ديون عليّ (debt:true)', ob.debtTotal, 5180);
-/* ملاحظة مهمة: F.obligations.plannedTotal يجمع البنود التي planned:true (وهي هنا
-   بنود الدين نفسها = 1,500)، لذلك الالتزامات القادمة = الإجمالي − الديون = 1,500. */
-eqMoney('plannedTotal (تعريف الدالة)', ob.plannedTotal, 1500);
-eqMoney('إجمالي الالتزامات', ob.total, 6680);
-eqMoney('الالتزامات القادمة (غير ديون) = الإجمالي − الديون', ob.total - ob.debtTotal, 1500);
-eqMoney('نطاق 180 + بقية رسوم المدرسة 5,000',
-  U.sum(ob.items.filter(t => t.debt), t => t.amount), 5180);
-eqMoney('كتب 950 + زي 450 + بنزين 100',
-  U.sum(ob.items.filter(t => !t.debt), t => t.amount), 1500);
+eqMoney('لا ديون عليّ', ob.debtTotal === undefined ? 0 : ob.debtTotal, 0);
+eqMoney('المصروفات المخطّطة = 1,680', ob.total, 1680);
+eqMoney('كلها مخطّطة (plannedTotal)', ob.plannedTotal, 1680);
+eqMoney('نطاق 180 + كتب 950 + زي 450 + بنزين 100', ob.total, 180 + 950 + 450 + 100);
+eqMoney('الأموال المجمّعة = النقد', F.accumulatedFunds(state).total, F.cashBalance(state));
+eqMoney('التزامات سنوية متبقية = 5,000', F.commitments(state).remainingTotal, 5000);
 
 /* ----------------------------------------------------------- أخرى مالية */
 
@@ -163,14 +159,17 @@ eqMoney('أكبر مصروف', top[0].amount, 120);
 
 const alerts = F.alerts(state, ASOF);
 ok('التنبيهات فيها مستحق لي', alerts.some(a => /مستحق/.test(a.title)));
-ok('التنبيهات فيها ديون عليّ', alerts.some(a => /ديون عليّ/.test(a.title)));
+ok('التنبيهات لا تذكر ديوناً', !alerts.some(a => /ديون عليّ/.test(a.title)));
+ok('التنبيهات فيها مصروفات مخطّطة', alerts.some(a => /مخطّطة/.test(a.title)));
 
 /* ---------------------------------------------------------- البذرة الأصلية */
 
 section('5) مطابقة البذرة (C)');
 eqMoney('C.DAILY_EXPENSES_TOTAL', C.DAILY_EXPENSES_TOTAL, 302);
 eqMoney('C.RECEIVED_TODAY_TOTAL', C.RECEIVED_TODAY_TOTAL, 3400);
-eqMoney('C.OBLIGATIONS_DEBT_ONLY', C.OBLIGATIONS_DEBT_ONLY, 5180);
+eqMoney('C.OBLIGATIONS_TOTAL (مخطّط)', C.OBLIGATIONS_TOTAL, 1680);
+eqMoney('C.COMMITMENTS_REMAINING', C.COMMITMENTS_REMAINING, 5000);
+eqMoney('C.FUND_OPENING', C.FUND_OPENING, 5000);
 eq('C.QUICK_ADD يحوي 8 فئات', C.QUICK_ADD.length, 8);
 eq('القوالب خمسة', state.templates.length, 5);
 

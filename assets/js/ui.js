@@ -179,7 +179,7 @@
     var loc = C.location(tx.locationId);
     var flags = [];
     if (tx.planned) flags.push(UI.badge('مخطّط', 'muted'));
-    if (tx.paid === false) flags.push(UI.badge(tx.debt ? 'دين' : 'لم يُسدَّد', 'danger'));
+    if (tx.paid === false && !tx.planned) flags.push(UI.badge('لم يُدفع', 'warn'));
     if (tx.chargeId) flags.push(UI.badge('إيجار', 'info'));
 
     var row = el('div', {

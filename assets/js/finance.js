@@ -373,29 +373,70 @@
     return found.length ? found[0] : null;
   };
 
-  /* ================================================= الديون عليّ والالتزامات */
+  /* ================================== المصروفات المخطّطة والأموال المجمّعة */
 
-  F.debts = function (state) {
-    var items = ((state && state.transactions) || []).filter(function (tx) {
-      return tx && tx.paid === false && !tx.planned && tx.type === 'expense';
-    }).sort(function (a, b) { return String(a.date) < String(b.date) ? -1 : 1; });
-    return { total: round(U.sum(items, function (t) { return Number(t.amount) || 0; })), count: items.length, items: items };
-  };
-
+  // مصروفات لم تُدفع بعد (مخطّطة أو معلّقة) — **ليست ديوناً**: المستخدم لا ديون عليه.
   F.obligations = function (state) {
     var items = ((state && state.transactions) || []).filter(function (tx) {
       return tx && tx.paid === false && tx.type === 'expense';
     });
-    var debts = items.filter(function (t) { return t.debt; });
     var planned = items.filter(function (t) { return t.planned; });
-    var real = items.filter(function (t) { return !t.planned; });
+    var unplanned = items.filter(function (t) { return !t.planned; });
+    var total = round(U.sum(items, function (t) { return Number(t.amount) || 0; }));
+    var plannedTotal = round(U.sum(planned, function (t) { return Number(t.amount) || 0; }));
     return {
-      total: round(U.sum(items, function (t) { return Number(t.amount) || 0; })),
-      debtTotal: round(U.sum(debts, function (t) { return Number(t.amount) || 0; })),
-      plannedTotal: round(U.sum(planned, function (t) { return Number(t.amount) || 0; })),
-      immediateTotal: round(U.sum(real, function (t) { return Number(t.amount) || 0; })),
+      total: total,
+      plannedTotal: plannedTotal,
+      immediateTotal: round(U.sum(unplanned, function (t) { return Number(t.amount) || 0; })),
       count: items.length,
       items: items.sort(function (a, b) { return (Number(b.amount) || 0) - (Number(a.amount) || 0); })
+    };
+  };
+
+  // لا ديون في هذا التطبيق — الدالة تبقى للتوافق وتُرجع صفراً دائماً
+  F.debts = function () {
+    return { total: 0, count: 0, items: [] };
+  };
+
+  // الأموال المجمّعة: من أين جاء النقد الموجود الآن (ليست ديوناً)
+  F.accumulatedFunds = function (state) {
+    var cash = F.cashBalance(state);
+    var sources = ((state && state.fundSources) || C.FUND_SOURCES).map(function (s) {
+      return {
+        key: s.key, label: s.label, amount: Number(s.amount) || 0,
+        note: s.note || '', fromToday: !!s.fromToday
+      };
+    });
+    var opening = (state && state.fundOpening !== undefined) ? state.fundOpening : C.FUND_OPENING;
+    return {
+      total: cash,
+      opening: opening,
+      openingNote: C.FUND_OPENING_NOTE,
+      sources: sources,
+      todayIncome: round(U.sum(sources.filter(function (s) { return s.fromToday && s.amount > 0; }), function (s) { return s.amount; })),
+      todayExpense: round(U.sum(sources.filter(function (s) { return s.fromToday && s.amount < 0; }), function (s) { return Math.abs(s.amount); })),
+      saving: F.savingsBalance(state),
+      grandTotal: F.totalBalance(state)
+    };
+  };
+
+  // الالتزامات السنوية (خطط مثل رسوم المدرسة) — معلومة، وليست ديوناً
+  F.commitments = function (state) {
+    var list = ((state && state.commitments) || C.COMMITMENTS).map(function (c) {
+      var annual = Number(c.annual) || 0;
+      var paid = Number(c.paidThisYear) || 0;
+      var remaining = c.remaining !== undefined ? Number(c.remaining) : Math.max(0, annual - paid);
+      return Object.assign({}, c, {
+        annual: round(annual), paidThisYear: round(paid), remaining: round(remaining),
+        pct: annual > 0 ? U.round(paid / annual * 100, 1) : 0
+      });
+    });
+    return {
+      list: list,
+      count: list.length,
+      annualTotal: round(U.sum(list, function (c) { return c.annual; })),
+      paidTotal: round(U.sum(list, function (c) { return c.paidThisYear; })),
+      remainingTotal: round(U.sum(list, function (c) { return c.remaining; }))
     };
   };
 
@@ -657,28 +698,28 @@
       });
     }
 
-    if (ob.debtTotal > 0) {
-      out.push({
-        level: 'danger', icon: '🧾',
-        title: 'ديون عليّ ' + U.fmtMoney(ob.debtTotal),
-        body: ob.items.filter(function (t) { return t.debt; }).map(function (t) { return t.label + ' ' + U.fmtMoney(t.amount); }).join('، ')
-      });
-    }
-
-    if (ob.plannedTotal - ob.debtTotal > 0) {
+    if (ob.plannedTotal > 0) {
       out.push({
         level: 'info', icon: '📌',
-        title: 'التزامات قادمة ' + U.fmtMoney(ob.plannedTotal - ob.debtTotal),
-        body: ob.items.filter(function (t) { return !t.debt; }).map(function (t) { return t.label + ' ' + U.fmtMoney(t.amount); }).join('، ')
+        title: 'مصروفات مخطّطة ' + U.fmtMoney(ob.plannedTotal),
+        body: 'ليست ديوناً — لم تُدفع بعد: ' + ob.items.map(function (t) { return t.label + ' ' + U.fmtMoney(t.amount); }).join('، ')
       });
     }
 
-    var afterDebts = round(F.totalBalance(state) - ob.debtTotal);
-    if (ob.debtTotal > 0 && afterDebts < 2000) {
+    if (ob.immediateTotal > 0) {
       out.push({
-        level: afterDebts < 0 ? 'danger' : 'warn', icon: '⚠️',
-        title: 'بعد سداد الديون: ' + U.fmtMoney(afterDebts),
-        body: 'رصيدك الحالي ' + U.fmtMoney(F.totalBalance(state)) + ' وسداد الديون يحتاج ' + U.fmtMoney(ob.debtTotal)
+        level: 'warn', icon: '🧾',
+        title: 'مصروفات معلّقة ' + U.fmtMoney(ob.immediateTotal),
+        body: ob.items.filter(function (t) { return !t.planned; }).map(function (t) { return t.label + ' ' + U.fmtMoney(t.amount); }).join('، ')
+      });
+    }
+
+    var cm = F.commitments(state);
+    if (cm.remainingTotal > 0) {
+      out.push({
+        level: 'info', icon: '🏫',
+        title: 'التزامات سنوية: متبقٍ ' + U.fmtMoney(cm.remainingTotal),
+        body: cm.list.map(function (c) { return c.label + ' — دُفع ' + U.fmtMoney(c.paidThisYear) + ' من ' + U.fmtMoney(c.annual) + ' (' + c.pct + '%)'; }).join('، ')
       });
     }
 
@@ -732,6 +773,8 @@
       saving: F.savingsBalance(state),
       receivables: rec,
       obligations: ob,
+      funds: F.accumulatedFunds(state),
+      commitments: F.commitments(state),
       savings: sav,
       domains: dom,
       alerts: F.domainAlerts(state, asOf).concat(F.alerts(state, asOf)),
@@ -760,7 +803,10 @@
     var rec = F.receivables(state, to);
     if (rec.total > 0) lines.push('مستحق لي: ' + U.fmtMoney(rec.total) + ' (' + rec.items.map(function (i) { return i.label; }).join('، ') + ')');
     var ob = F.obligations(state);
-    if (ob.debtTotal > 0) lines.push('ديون عليّ: ' + U.fmtMoney(ob.debtTotal));
+    if (ob.plannedTotal > 0) lines.push('مصروفات مخطّطة (ليست ديوناً): ' + U.fmtMoney(ob.plannedTotal) + ' — ' + ob.items.map(function (t) { return t.label; }).join('، '));
+    var cm = F.commitments(state);
+    if (cm.remainingTotal > 0) lines.push('التزامات سنوية متبقية: ' + U.fmtMoney(cm.remainingTotal) + ' — ' + cm.list.map(function (c) { return c.label + ' (متبقٍ ' + U.fmtMoney(c.remaining) + ')'; }).join('، '));
+    lines.push('الأموال المجمّعة في الصندوق: ' + U.fmtMoney(F.cashBalance(state)) + ' — الأصل منها قبل اليوم ' + U.fmtMoney(F.accumulatedFunds(state).opening));
     lines.push('الرصيد: ' + U.fmtMoney(F.totalBalance(state)) + ' (نقد ' + U.fmtMoney(F.cashBalance(state)) + ' + ادخار ' + U.fmtMoney(F.savingsBalance(state)) + ')');
     return lines;
   };

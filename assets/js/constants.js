@@ -35,11 +35,11 @@
     cash: 5000,
     saving: 1500,
     total: 6500,
-    note: 'كما هي اليوم في الشنطة (5,000) والمدخرات السابقة (1,500) — من إيرادات سابقة + 3,000 سُلّفت اليوم من الأجانب و400 أُعيدت، والصافي المتبقي 5,000.'
+    note: '5,000 نقود مجموعة في الصندوق (لا ديون ولا قروض — أموال مجمّعة من إيرادات سابقة) + 1,500 مدخرات محفوظة.'
   };
 
   C.ACCOUNTS = [
-    { id: 'cash', name: 'الشنطة (نقد)', kind: 'cash', opening: C.OPENING.cash, icon: '💵', order: 1 },
+    { id: 'cash', name: 'الصندوق (نقد)', kind: 'cash', opening: C.OPENING.cash, icon: '💵', order: 1 },
     { id: 'saving', name: 'مدخرات / احتياطي', kind: 'saving', opening: C.OPENING.saving, icon: '🏦', order: 2 }
   ];
 
@@ -63,7 +63,7 @@
     {
       id: 't-studio-rent', locationId: 'studio', label: 'إيجار الاستوديو', amount: 2000,
       cycle: 'quarterly', anchorMonth: 10, dayOfMonth: 1, kind: 'rent', receiptNo: 'RCP-2402',
-      category: 'rent_studio', note: 'دفعة ثلاثة أشهر (10+11+12)'
+      category: 'rent_studio', note: 'دفعة ثلاثة أشهر (10+11+12) — سيأخذها هذا الشهر، ولم تُستلم بعد'
     },
     {
       id: 't-ws-paint', locationId: 'workshops', label: 'ورشة السمكرة والطلاء', amount: 1900,
@@ -97,13 +97,48 @@
   ];
   C.RECEIVED_TODAY_TOTAL = 3400;
   C.RECEIVED_TODAY_LABEL = 'ورشة السمكرة والطلاء + الورشة الميكانيكية';
+  C.RECEIVED_TODAY_SHORT = 'إيرادات الإيجارات المحصَّلة اليوم';
 
-  /* ------------------------------- استحقاقات مستحقة ولم تُحصَّل (يوم 5 أكتوبر) */
+  /* ------------------------------- استحقاقات لم تُحصَّل بعد (يوم 5 أكتوبر) */
   C.PENDING_CHARGES = [
     { templateId: 't-shop-rent', note: 'إيجار شهر أكتوبر — لم أستلمه بعد (اليوم 5 من الشهر)' },
-    { templateId: 't-studio-rent', note: 'دفعة الربع الرابع (10+11+12) — لم أستلمها بعد' },
+    { templateId: 't-studio-rent', note: 'دفعة الربع الرابع (10+11+12) — سيأخذها هذا الشهر ولم تُستلم بعد' },
     { templateId: 't-rooms', note: 'إيجار حجرات العمال — لم أستلمه بعد' }
   ];
+
+  /* ================== مصروفات مخطّطة/معلّقة (لا تُخصم من الرصيد حتى الدفع) ==================
+     ملاحظة مهمة: هذه ليست ديوناً. المستخدم لا ديون عليه.
+     - رسوم المدرسة السنوية 6,000 دُفعت منها 1,000 → المتبقي 5,000 خطّة سنوية (C.COMMITMENTS).
+     - بطاقة النطاق 180 وصلت بيد شخص وسيُسدَّد له عند التجديد. */
+  C.OBLIGATIONS = [
+    { key: 'domain_renewal', label: 'تجديد نطاق .org (القرآن الكريم — صدقة)', amount: 180, category: 'domain_hosting', icon: '🌐', paid: false, note: 'البطاقة وصلتني من شخص وسأسدّد عند التجديد', upcoming: true },
+    { key: 'school_books', label: 'كتب ابنتي (مدرسة خاصة)', amount: 950, category: 'school_books', icon: '📚', paid: false, note: 'لم أشترِها بعد', upcoming: true },
+    { key: 'school_uniform', label: 'الزي الجديد', amount: 450, category: 'clothes', icon: '👕', paid: false, note: 'تقديري', upcoming: true },
+    { key: 'fuel', label: 'تعبئة البنزين', amount: 100, category: 'fuel', icon: '⛽', paid: false, note: 'مصروف متكرر — قيمة تقديرية', upcoming: true }
+  ];
+  C.OBLIGATIONS_TOTAL = C.OBLIGATIONS.reduce(function (s, e) { return s + e.amount; }, 0); // 1,680
+
+  /* التزامات سنوية (خطط، ليست ديوناً): تُعرض كمعلومة فقط ولا تدخل في الالتزامات الفورية */
+  C.COMMITMENTS = [
+    {
+      key: 'school_annual', label: 'رسوم المدرسة السنوية', icon: '🏫',
+      annual: 6000, paidThisYear: 1000, remaining: 5000,
+      paidOn: '2026-10-05', category: 'school_tuition',
+      note: 'التكلفة 6,000 في السنة — دُفعت 1,000، والمتبقي يُسدَّد على دفعات خلال السنة'
+    }
+  ];
+  C.COMMITMENTS_REMAINING = C.COMMITMENTS.reduce(function (s, c) { return s + (c.remaining || 0); }, 0);
+
+  /* ==================================== الأموال المجمّعة (الصندوق) ====================================
+     ليست ديوناً ولا قروضاً — نقود مجموعة في الصندوق، منها ما كان موجوداً قبل هذا الشهر. */
+  C.FUND_OPENING = 5000;         // ما كان في الصندوق قبل إيرادات اليوم
+  C.FUND_OPENING_NOTE = 'نقود مجموعة في الصندوق قبل إيرادات اليوم (من إيرادات الأشهر السابقة)';
+  C.FUND_SOURCES = [
+    { key: 'previous_balance', label: 'رصيد سابق في الصندوق', amount: 5000, note: 'مجموع من إيرادات سابقة' },
+    { key: 'today_rents', label: 'إيرادات اليوم (تحصيل إيجارات)', amount: 3400, note: 'ورشة السمكرة 1,900 + الميكانيكا 1,500', fromToday: true },
+    { key: 'today_expenses', label: 'مصروفات اليوم', amount: -302, note: 'خضار ومواد غذائية وخبز وقهوة وتصريف مياه', fromToday: true }
+  ];
+  C.FUND_SOURCES_TOTAL = C.FUND_SOURCES.reduce(function (s, f) { return s + f.amount; }, 0); // 8,098
 
   /* =========================================================== مصروفات اليوم */
   /* 5 أكتوبر: 302 د.ل موزّعة كما في القصة بالحرف */
@@ -115,21 +150,6 @@
     { key: 'bread', label: 'خبز + ملحقات (مخبز)', amount: 15, category: 'bakery', icon: '🍞' }
   ];
   C.DAILY_EXPENSES_TOTAL = C.DAILY_EXPENSES.reduce(function (s, e) { return s + e.amount; }, 0); // 302
-
-  /* ====================== التزامات لم تُسدَّد (لا تُخصم من الرصيد حتى السداد) */
-  C.OBLIGATIONS = [
-    { key: 'domain_renewal', label: 'تجديد نطاق .org (القرآن الكريم — صدقة)', amount: 180, category: 'domain_hosting', icon: '🌐', paid: false, note: 'وصلتني البطاقة من شخص وسأسدّد له', debt: true },
-    { key: 'school_tuition', label: 'بقية رسوم المدرسة السنوية', amount: 5000, category: 'school_tuition', icon: '🏫', paid: false, note: 'الرسوم السنوية 6,000 ودُفعت 1,000', debt: true },
-    { key: 'school_books', label: 'كتب ابنتي (مدرسة خاصة)', amount: 950, category: 'school_books', icon: '📚', paid: false, note: 'لم أشترِها بعد', debt: false },
-    { key: 'school_uniform', label: 'الزي الجديد', amount: 450, category: 'clothes', icon: '👕', paid: false, note: 'تقديري', debt: false },
-    { key: 'fuel', label: 'تعبئة البنزين', amount: 100, category: 'fuel', icon: '⛽', paid: false, note: 'مصروف متكرر — قيمة تقديرية', debt: false }
-  ];
-  C.OBLIGATIONS_TOTAL = C.OBLIGATIONS.reduce(function (s, e) { return s + e.amount; }, 0);
-
-  /* الرصيد النقدي المتوقّع بعد سداد كل الالتزامات: 8,098 − 6,680 = 1,418 */
-  C.OBLIGATIONS_DEBT_ONLY = C.OBLIGATIONS
-    .filter(function (o) { return o.debt; })
-    .reduce(function (s, o) { return s + o.amount; }, 0);
 
   /* ------------------------------------------------------------ فئات المصروفات */
   C.EXPENSE_CATEGORIES = [

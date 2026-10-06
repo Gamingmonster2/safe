@@ -33,12 +33,13 @@ if (!browser) {
 }
 fs.mkdirSync(OUT, { recursive: true });
 
-const userDir = path.join(process.env.TEMP || '/tmp', 'masrofi-audit-' + Date.now());
+const userDir = path.join(ROOT, '.tmp-audit-profile');
+try { fs.rmSync(userDir, { recursive: true, force: true }); } catch {}
 const url = 'file:///' + path.join(ROOT, 'index.html').replace(/\\/g, '/');
 const child = spawn(browser, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--disable-extensions', '--hide-scrollbars', '--mute-audio',
-  `--user-data-dir=${userDir}`,
+  '--user-data-dir=' + userDir,
   `--remote-debugging-port=${PORT}`,
   `--window-size=${WIDTH},${HEIGHT}`,
   'about:blank'

@@ -63,7 +63,7 @@
       { name: 'method', label: 'طريقة الدفع', type: 'select', options: methodOptions() },
       { name: 'accountId', label: 'الحساب', type: 'select', options: accountOptions(state) },
       { name: 'locationId', label: 'المكان (اختياري)', type: 'select', options: locationOptions(state) },
-      { name: 'unpaid', label: 'على الحساب (لم أسدّد)', type: 'checkbox', span: 2, hint: 'لن يُخصم من الرصيد حتى تسدّده، وسيظهر في «الديون عليّ»' },
+      { name: 'unpaid', label: 'لم أدفعه بعد (مخطّط)', type: 'checkbox', span: 2, hint: 'لن يُخصم من الرصيد حتى تدفعه، وسيظهر في «مصروفات مخطّطة» — هذا ليس ديناً' },
       { name: 'note', label: 'ملاحظة', type: 'text', placeholder: 'مثال: خضار من السوق', span: 2 }
     ], { values: values });
 
@@ -98,8 +98,7 @@
           locationId: v.locationId || null,
           method: v.unpaid ? 'credit' : (v.method || 'cash'),
           paid: !v.unpaid,
-          debt: !!v.unpaid,
-          planned: false,
+          planned: !!v.unpaid,
           note: v.note || ''
         });
         UI.toast('تم إضافة ' + U.fmtMoney(v.amount) + ' — ' + cat.label, 'success');
@@ -153,7 +152,7 @@
           accountId: v.accountId || tx.accountId,
           locationId: v.locationId || null,
           paid: !v.unpaid,
-          debt: !!v.unpaid,
+          planned: !!v.unpaid,
           note: v.note || ''
         });
         UI.toast('تم تعديل المصروف', 'success');
@@ -273,7 +272,7 @@
     });
 
     var filterTabs = U.el('div', { class: 'tabs' }, [
-      ['all', 'الكل'], ['paid', 'مدفوع'], ['unpaid', 'لم يُسدَّد']
+      ['all', 'الكل'], ['paid', 'مدفوع'], ['unpaid', 'لم يُدفع']
     ].map(function (pair) {
       return U.el('button', {
         type: 'button',
