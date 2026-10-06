@@ -25,7 +25,7 @@
 
 /* ⚠️ حدّث هذا السطر مع C.VERSION في assets/js/constants.js عند كل إصدار */
 const APP_VERSION = '1.0.0';
-const CACHE = 'masrofi-v1.0.0';
+const CACHE = 'masrofi-v1.1.0';
 
 /* قائمة التخزين المسبق — مكتوبة صراحةً (بدون glob) لتطابق ملفات المشروع فعلياً */
 const PRECACHE = [
