@@ -741,7 +741,9 @@ if (bootResult) {
     eq('كل سكربتات/أنماط index.html داخل precache', notCached.length, 0);
     if (notCached.length) line('       غير مخزَّنة مسبقاً: ' + notCached.join(', '));
 
-    const swVer = /const\s+APP_VERSION\s*=\s*'([^']+)'/.exec(sw);
+    /* إصدار الكاش في sw.js يجب أن يحمل نفس رقم C.VERSION
+       (الصيغة الفعلية: const CACHE = 'masrofi-v1.1.1') */
+    const swVer = /const\s+CACHE\s*=\s*'[^']*?-v?([0-9]+\.[0-9]+\.[0-9]+)'/.exec(sw);
     eq('إصدار sw.js يطابق C.VERSION', swVer ? swVer[1] : null, C.VERSION);
   }
 

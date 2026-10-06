@@ -30,6 +30,7 @@
 
   /* سرّ الثنائية يبقى في الذاكرة فقط حتى يؤكّده المستخدم أو يتخطّاه — لا يُحفظ أبداً */
   var pendingTotp = null;
+  var pendingPassword = null;   // كلمة السر الجارية — لتعطيل الثنائية عند التخطّي
   /* دوال تنظيف المؤقتات (تُنفَّذ عند destroy) */
   var cleanups = [];
 
@@ -267,10 +268,10 @@
         hint: 'يُحفظ غير مشفّر في البيانات الوصفية — لا تكتب كلمة السر نفسها.'
       },
       {
-        name: 'enable2FA', label: 'المصادقة الثنائية (TOTP) — موصى بها', type: 'checkbox',
-        hint: 'رمز من ' + OTP_DIGITS + ' أرقام من تطبيق المصادقة مع كل دخول.'
+        name: 'enable2FA', label: 'المصادقة الثنائية (اختيارية)', type: 'checkbox',
+        hint: 'رمز من ' + OTP_DIGITS + ' أرقام من تطبيق المصادقة مع كل دخول. اتركها فارغة للدخول بكلمة السر فقط — ويمكن تفعيلها لاحقاً من الإعدادات.'
       }
-    ], { values: { enable2FA: true } });
+    ], { values: { enable2FA: false } });
 
     /* مؤشر القوة يُدرج مباشرة بعد خانة كلمة السر */
     var strengthLabel = el('div', { class: 'lock-strength-label', text: 'قوة كلمة السر: لم تُكتب بعد' });
@@ -351,6 +352,7 @@
             return;
           }
           if (enable2FA && res.totpSecret) {
+            pendingPassword = password;   // نحتاجه لو ضغط «تخطّي»
             showTotpState(rootEl, res.totpSecret, res.otpauthURI || '');
             return;
           }
@@ -483,13 +485,25 @@
     }
 
     function onSkip() {
-      /* يُخفي خانة التحقق ثم يتابع بلا تأكيد — والثنائية تبقى مسجّلة في الخزنة،
-         فنُبقي السرّ في الذاكرة (إعادة التحميل كانت ستُضيّعه وتقفل الحساب). */
+      /* مهم: التخطّي يجب أن يُعطّل الثنائية فعلاً. لو بقيت مسجّلة بلا تأكيد
+         لقُفل الحساب في الدخول القادم برمز لا يملكه المستخدم. */
       var field = codeInput.parentNode;
       if (field && field.classList) field.classList.add('hidden');
       if (verifyError && verifyError.hide) verifyError.hide();
-      UI.toast('تخطّيت التفعيل — الثنائية مسجّلة وستُطلب في الدخول القادم، فاحفظ السرّ أعلاه', 'info');
-      finishAuth();
+      setBusy(skip, true, 'جارٍ التعطيل…');
+      var off = (V && typeof V.disable2FAWithPassword === 'function' && pendingPassword)
+        ? V.disable2FAWithPassword({ password: pendingPassword })
+        : Promise.resolve({ ok: true, skipped: true });
+      Promise.resolve(off).then(function (res) {
+        pendingTotp = null;
+        pendingPassword = null;
+        if (res && res.ok) {
+          UI.toast('تم التخطّي — الدخول بكلمة السر فقط. يمكنك تفعيل المصادقة الثنائية لاحقاً من الإعدادات.', 'success', 5000);
+        } else {
+          UI.toast('تعذّر تعطيلها تلقائياً (' + ((res && res.error) || 'خطأ') + ') — يمكنك تعطيلها من الإعدادات، قسم الأمان.', 'warn', 6000);
+        }
+        finishAuth();
+      });
     }
 
     codeInput.addEventListener('keydown', function (e) { if (e && e.key === 'Enter') onVerify(); });
@@ -747,10 +761,50 @@
       var importError = statusBox('danger', 'alert');
       importError.el.setAttribute('id', 'lock-import-error');
 
+      /* مخرج الطوارئ: من فعّل الثنائية وتخطّى تأكيدها (أو ضاع هاتفه) */
+      var rescuePw = el('input', {
+        type: 'password', class: 'input', id: 'lock-rescue-password',
+        autocomplete: 'current-password', placeholder: 'كلمة السر الحالية'
+      });
+      var rescueError = statusBox('danger', 'alert');
+      rescueError.el.setAttribute('id', 'lock-rescue-error');
+      var rescueBox = null;
+
+      function doRescue() {
+        rescueError.hide();
+        var pw = String(rescuePw.value || '');
+        if (!pw) { rescueError.show('كلمة السر مطلوبة', 'أدخل كلمة السر التي أنشأت بها الحساب.'); return false; }
+        if (!V || typeof V.disable2FAWithPassword !== 'function') {
+          rescueError.show('غير متاح', 'وحدة الحماية لا توفّر هذه الوظيفة.'); return false;
+        }
+        rescueError.hide();
+        Promise.resolve(V.disable2FAWithPassword({ password: pw })).then(function (res) {
+          if (res && res.ok) {
+            UI.toast('تم تعطيل المصادقة الثنائية — تابع الدخول بكلمة السر', 'success', 5000);
+            reloadPage();
+            return;
+          }
+          rescueError.show('تعذّر التعطيل', (res && res.error) ? String(res.error) : 'تأكد من كلمة السر.');
+        });
+        return false;
+      }
+
+      if (twoFactor) {
+        rescueBox = el('div', { class: 'field lock-rescue' }, [
+          staticAlert('info', 'info', 'هل طلب منك رمز لا تملكه؟',
+            'إن كنت فعّلت المصادقة الثنائية ولم تُكمل تأكيدها في تطبيق المصادقة (أو ضاع هاتفك)، أدخل كلمة السر هنا لتعطيلها والدخول.'),
+          el('label', { class: 'field-label', for: 'lock-rescue-password', text: 'كلمة السر لتعطيل المصادقة الثنائية' }),
+          rescuePw,
+          rescueError.el,
+          UI.btn('عطّل المصادقة الثنائية وادخل', { icon: 'key', tone: 'ghost', className: 'btn-block', onClick: doRescue })
+        ]);
+      }
+
       var body = el('div', { class: 'modal-body lock-forgot' }, [
         staticAlert('warn', 'alert', 'لا يمكن استعادة كلمة السر',
           'لا يوجد خادم يحفظ كلمة السر ولا يملك مفتاحها. التشفير يجري في متصفحك، فلا أحد — ولا هذا التطبيق — يستطيع إعادة تعيينها.'),
         el('p', { class: 'modal-text', text: 'التعافي الوحيد هو ملف نسخة احتياطية مشفّر صدّرته سابقاً وتعرف كلمة السر الخاصة به. لن يفيد تخمين كلمة السر هنا؛ الاستيراد نفسه يفكّ التشفير بالكلمة الصحيحة.' }),
+        rescueBox,
         el('div', { class: 'field' }, [
           el('label', { class: 'field-label', for: 'lock-import-file', text: 'ملف النسخة المشفّرة (.json)' }),
           fileInput,

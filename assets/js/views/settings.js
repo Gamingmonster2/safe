@@ -77,9 +77,9 @@
         });
       } }),
       UI.btn('تغيير كلمة السر', { tone: 'ghost', icon: 'key', onClick: function () { openChangePassword(V, has2fa); } }),
-      UI.btn(has2fa ? 'عطّل المصادقة الثنائية' : 'المصادقة الثنائية غير مفعّلة', {
-        tone: 'ghost', icon: 'shield', disabled: !has2fa,
-        onClick: function () { openDisable2FA(V); }
+      UI.btn(has2fa ? 'عطّل المصادقة الثنائية' : 'فعّل المصادقة الثنائية', {
+        tone: 'ghost', icon: 'shield',
+        onClick: function () { has2fa ? openDisable2FA(V) : openEnable2FA(V); }
       }),
       UI.btn('نسخة مشفّرة', { tone: 'ghost', icon: 'download', onClick: function () {
         Promise.resolve(V.exportEncrypted()).then(function (res) {
@@ -133,6 +133,127 @@
         });
         return { ok: false };
       }
+    });
+  }
+
+  /* التفعيل لاحقاً: يولّد سرّاً جديداً ويعرضه، ثم يؤكّد برمز من التطبيق */
+  function openEnable2FA(V) {
+    var pw = U.el('input', { type: 'password', class: 'input', id: 'set-2fa-password', autocomplete: 'current-password' });
+    var code = U.el('input', {
+      type: 'text', class: 'input mono', id: 'set-2fa-code', inputmode: 'numeric',
+      maxlength: '6', placeholder: '6 أرقام'
+    });
+    var secretBox = U.el('div', { class: 'mono secret-box hidden', dir: 'ltr' });
+    var uriBox = U.el('div', { class: 'mono secret-box small hidden', dir: 'ltr' });
+    var step2 = U.el('div', { class: 'hidden' });
+    var err = U.el('div', { class: 'alert alert-danger hidden' });
+    var info = U.el('div', { class: 'muted', text: 'أدخل كلمة السر لتفعيل المصادقة الثنائية، ثم أضف السرّ في تطبيق المصادقة (Google Authenticator / Authy / Microsoft Authenticator).' });
+    var pendingPw = null;      // كلمة السر المستخدمة في التوليد (للتراجع)
+    var pendingOn = false;     // هل الثنائية مسجّلة وتنتظر التأكيد؟
+
+    /* تراجع: يُعطّل الثنائية إن كانت مسجّلة بلا تأكيد */
+    function rollbackPending() {
+      if (!pendingOn || !pendingPw) return Promise.resolve(false);
+      var pw = pendingPw;
+      pendingOn = false;
+      pendingPw = null;
+      return Promise.resolve(V.disable2FAWithPassword
+        ? V.disable2FAWithPassword({ password: pw })
+        : { ok: false }).then(function (res) {
+          if (res && res.ok) UI.toast('أُلغي التفعيل — بقيت الحماية بكلمة السر فقط', 'info', 4500);
+          return !!(res && res.ok);
+        }, function () { return false; });
+    }
+
+    step2.appendChild(U.el('div', { class: 'field' }, [
+      U.el('label', { class: 'field-label', text: 'أدخل الرمز المكوّن من 6 أرقام للتأكيد' }),
+      code
+    ]));
+    step2.appendChild(err);
+
+    UI.modal({
+      title: 'تفعيل المصادقة الثنائية',
+      /* إن أُغلقت النافذة قبل تأكيد الرمز نتراجع تلقائياً: لا نترك ثنائية
+         مسجّلة بلا تأكيد (وإلا طُلب رمز قد لا يعمل). */
+      onClose: function () { rollbackPending(); },
+      body: U.el('div', {}, [
+        info,
+        U.el('div', { class: 'field' }, [
+          U.el('label', { class: 'field-label', for: 'set-2fa-password', text: 'كلمة السر الحالية' }),
+          pw
+        ]),
+        U.el('div', { class: 'hidden', id: 'set-2fa-secret-wrap' }, [
+          U.el('div', { class: 'field-label', text: 'السرّ (الصقه في تطبيق المصادقة يدوياً)' }),
+          secretBox,
+          U.el('div', { class: 'btn-row' }, [
+            UI.btn('انسخ السرّ', { tone: 'ghost', size: 'sm', icon: 'copy', onClick: function () {
+              if (U.copy) U.copy(secretBox.textContent); UI.toast('نُسخ السرّ', 'success');
+            } }),
+            UI.btn('انسخ الرابط', { tone: 'ghost', size: 'sm', icon: 'copy', onClick: function () {
+              if (U.copy) U.copy(uriBox.textContent); UI.toast('نُسخ الرابط', 'success');
+            } })
+          ]),
+          uriBox
+        ]),
+        step2
+      ]),
+      wide: true,
+      actions: [
+        { label: 'إغلاق', tone: 'ghost' },
+        {
+          /* زر واحد يتحوّل: «فعّل» ثم «تأكيد الرمز» بعد ظهور السرّ */
+          label: 'فعّل',
+          tone: 'primary',
+          close: false,
+          id: 'set-2fa-main',
+          onClick: function (ev) {
+            err.classList.add('hidden');
+            var btn = (ev && ev.currentTarget) || document.getElementById('set-2fa-main');
+            /* المرحلة 2: تأكيد الرمز */
+            if (!step2.classList.contains('hidden')) {
+              var c = String(code.value || '').replace(/[^0-9]/g, '');
+              if (c.length !== 6) { UI.toast('أدخل 6 أرقام', 'danger'); return false; }
+              var ok = false;
+              try { ok = !!V.totp.verify(secretBox.textContent, c); } catch (e) { ok = false; }
+              if (!ok) {
+                err.className = 'alert alert-danger';
+                err.textContent = 'الرمز غير صحيح — تأكد أن ساعة الجهاز مضبوطة تلقائياً ثم أعد المحاولة.';
+                UI.toast('الرمز غير صحيح', 'danger', 4200);
+                return false;
+              }
+              pendingOn = false;      // تأكّد: لا تراجع بعد الآن
+              pendingPw = null;
+              UI.toast('تم تفعيل المصادقة الثنائية', 'success');
+              closeModalQuiet();
+              if (Fin.App) Fin.App.refresh();
+              return false;
+            }
+            /* المرحلة 1: توليد السرّ */
+            var password = String(pw.value || '');
+            if (!password) { UI.toast('أدخل كلمة السر', 'danger'); return false; }
+            if (btn) { btn.disabled = true; btn.textContent = 'جارٍ التوليد…'; }
+            Promise.resolve(V.enable2FA({ password: password })).then(function (res) {
+              if (!res || !res.ok) {
+                if (btn) { btn.disabled = false; btn.textContent = 'فعّل'; }
+                err.className = 'alert alert-danger';
+                err.textContent = (res && res.error) || 'تعذّر التفعيل';
+                return;
+              }
+              secretBox.textContent = String(res.totpSecret || '');
+              uriBox.textContent = String(res.otpauthURI || '');
+              pendingPw = password;
+              pendingOn = true;
+              var wrap = document.getElementById('set-2fa-secret-wrap');
+              if (wrap) wrap.classList.remove('hidden');
+              step2.classList.remove('hidden');
+              info.textContent = 'أضف السرّ في تطبيق المصادقة الآن (لصق يدوي)، ثم أدخل الرمز الذي يظهر فيه واضغط «تأكيد الرمز».';
+              if (btn) { btn.disabled = false; btn.textContent = 'تأكيد الرمز'; }
+              UI.toast('أُنشئ السرّ — أضفه في تطبيق المصادقة', 'success', 5000);
+            });
+            return false;
+          }
+        }
+      ]
     });
   }
 

@@ -395,6 +395,10 @@
         overlay.classList.remove('is-open');
         setTimeout(function () { detach(overlay); }, 180);
         document.removeEventListener('keydown', onKey);
+        /* onClose: يُنادى عند أي إغلاق (زر/ESC/الخلفية) — للتنظيف أو التراجع */
+        if (typeof opts.onClose === 'function') {
+          try { opts.onClose(result); } catch (e) { console.error('[ui] onClose', e); }
+        }
         resolve(result);
       }
       function onKey(e) { if (e.key === 'Escape') close(null); }

@@ -134,7 +134,8 @@ section('1) الإعداد ثم القفل ثم الفتح بكلمة سر صح�
 await test('الواجهة العامة تحتوي كل دوال القسم 3', () => {
   ['isSupported', 'isConfigured', 'isUnlocked', 'username', 'has2FA', 'meta', 'lock',
     'setup', 'unlock', 'load', 'save', 'saveNow', 'changePassword',
-    'exportEncrypted', 'importEncrypted', 'reset'].forEach((k) => {
+    'exportEncrypted', 'importEncrypted', 'reset',
+    'disable2FA', 'disable2FAWithPassword', 'enable2FA'].forEach((k) => {
     assert(typeof V[k] === 'function', 'Vault.' + k + ' مفقودة أو ليست دالة');
   });
   ['generateSecret', 'code', 'verify', 'otpauthURI', 'remainingSeconds'].forEach((k) => {
@@ -647,6 +648,210 @@ await test('لا يُصدَّر أي مفتاح أو سرّ في العائدا�
   assert(JSON.stringify(s).indexOf(PW) < 0, 'setup لا يرجّع كلمة السر');
   const ls = vaultRaw();
   ls.totp.secretIv && assert(V.utils.b64d(ls.totp.secretIv).length === 12, 'IV السرّ 12 بايت');
+});
+
+/* ===========================================================================
+ * 13) تعطيل/تفعيل الثنائية لاحقاً — إصلاح قفل «تخطّي» في أول إعداد
+ * ======================================================================== */
+section('13) disable2FAWithPassword / enable2FA / disable2FA');
+
+await test('disable2FAWithPassword بكلمة خطأ: bad-password ولا تغيير في البايتات', async () => {
+  await freshVault({ enable2FA: true });
+  await V.saveNow(DATA);
+  V.lock();
+  const before = storageText(LS);
+  SS.clear();
+  await expectFail(V.disable2FAWithPassword({ password: PW + 'x' }), 'bad-password', 'كلمة خطأ');
+  await expectFail(V.disable2FAWithPassword({ password: '' }), null, 'كلمة فارغة');
+  eq(storageText(LS), before, 'لا تغيير في localStorage');
+  assert(V.has2FA() === true, 'الثنائية باقية');
+  assert(V.isUnlocked() === false, 'لا فتح بلا كلمة سر صحيحة');
+  SS.clear();
+  await expectFail(V.unlock({ password: PW }), 'bad-code', 'الخزنة ما زالت تطلب الرمز');
+});
+
+await test('disable2FAWithPassword بكلمة صحيحة: تعطيل ثم فتح بلا رمز بنفس البيانات', async () => {
+  const s = await freshVault({ enable2FA: true });
+  const secret = s.totpSecret;
+  await V.saveNow(DATA);
+  V.lock();
+  const dataBefore = JSON.stringify(vaultRaw().data);
+  SS.clear();
+  const r = await V.disable2FAWithPassword({ password: PW });
+  assert(r.ok === true, 'ok: ' + JSON.stringify(r));
+  assert(r.already !== true, 'ليست حالة already');
+  assert(V.has2FA() === false, 'has2FA=false');
+  assert(V.isUnlocked() === false, 'لا تفتح الخزنة بذاتها — المستخدم يدخل كلمته');
+  const raw = vaultRaw();
+  assert(raw.totp === undefined, 'سجل totp أُزيل');
+  eq(JSON.stringify(raw.data), dataBefore, 'data لم تُمس إطلاقاً');
+  assert(raw.verifier && raw.wrap && raw.salt, 'verifier/wrap/salt متسقة');
+
+  SS.clear();
+  eq(await V.unlock({ password: PW }), { ok: true }, 'فتح بكلمة السر وحدها');
+  eq(await V.load(), DATA, 'نفس البيانات بالحرف');
+  assert(storageText(LS).indexOf(secret) < 0, 'السرّ القديم غير مخزَّن');
+
+  SS.clear();
+  eq(await V.disable2FAWithPassword({ password: PW }), { ok: true, already: true }, 'مرة ثانية = already');
+});
+
+await test('enable2FA بكلمة خطأ: مرفوض ولا يغيّر شيئاً والخزنة تعمل', async () => {
+  await freshVault();
+  await V.saveNow(DATA);
+  const before = storageText(LS);
+  SS.clear();
+  await expectFail(V.enable2FA({ password: PW + 'x' }), 'bad-password', 'كلمة خطأ');
+  eq(storageText(LS), before, 'لا تغيير في localStorage');
+  assert(V.has2FA() === false, 'لم تُفعّل');
+  eq(await V.load(), DATA, 'الخزنة تعمل بكلمة السر');
+  SS.clear();
+  V.lock();
+  eq(await V.unlock({ password: PW }), { ok: true }, 'فتح عادي بلا رمز');
+});
+
+await test('enable2FA بكلمة صحيحة: سرّ 32 محرفاً + otpauthURI + فتح بالرمز الحقيقي', async () => {
+  await freshVault();
+  await V.saveNow(DATA);
+  const r = await V.enable2FA({ password: PW });
+  assert(r.ok === true, 'enable: ' + JSON.stringify(r));
+  assert(typeof r.totpSecret === 'string' && r.totpSecret.length === 32, 'السرّ 32 محرفاً (20 بايت)');
+  assert(/^otpauth:\/\/totp\//.test(r.otpauthURI), 'otpauthURI');
+  assert(r.otpauthURI.indexOf(encodeURIComponent(r.totpSecret)) > 0, 'السرّ داخل الـURI');
+  assert(V.has2FA() === true, 'has2FA');
+  const v = vaultRaw();
+  assert(v.totp && v.totp.secretIv, 'السرّ مخزَّن مشفّراً');
+  assert(storageText(LS).indexOf(r.totpSecret) < 0, 'السرّ غير مخزَّن نصاً');
+
+  V.lock(); SS.clear();
+  eq(await V.unlock({ password: PW, code: V.totp.code(r.totpSecret) }), { ok: true }, 'فتح بالرمز');
+  eq(await V.load(), DATA, 'نفس البيانات بالحرف');
+  V.lock(); SS.clear();
+  await expectFail(V.unlock({ password: PW }), 'bad-code', 'بلا رمز بعد التفعيل');
+});
+
+await test('الدورة الكاملة: enable2FA → disable2FAWithPassword → فتح بكلمة السر فقط', async () => {
+  await freshVault();
+  await V.saveNow(DATA);
+  const e = await V.enable2FA({ password: PW });
+  assert(e.ok === true, 'تفعيل لاحق');
+  V.lock(); SS.clear();
+  eq(await V.unlock({ password: PW, code: V.totp.code(e.totpSecret) }), { ok: true }, 'فتح بالرمز');
+  V.lock(); SS.clear();
+  const d = await V.disable2FAWithPassword({ password: PW });
+  assert(d.ok === true, 'تعطيل بكلمة السر');
+  SS.clear();
+  eq(await V.unlock({ password: PW }), { ok: true }, 'فتح بكلمة السر فقط');
+  eq(await V.load(), DATA, 'نفس البيانات');
+  assert(V.has2FA() === false, 'الثنائية متوقفة');
+});
+
+await test('enable2FA مرتين: الثانية مرفوضة ولا تغيّر شيئاً', async () => {
+  await freshVault();
+  await V.saveNow(DATA);
+  const a = await V.enable2FA({ password: PW });
+  assert(a.ok === true, 'الأولى تنجح');
+  const before = storageText(LS);
+  const b = await V.enable2FA({ password: PW });
+  assert(b.ok === false, 'الثانية مرفوضة');
+  assert(/مفعّلة/.test(String(b.error)), 'رسالة «مفعّلة بالفعل»: ' + b.error);
+  eq(storageText(LS), before, 'لا تغيير في البايتات');
+  V.lock(); SS.clear();
+  eq(await V.unlock({ password: PW, code: V.totp.code(a.totpSecret) }), { ok: true }, 'السرّ الأول ما زال صالحاً');
+});
+
+await test('enable2FA وهي مقفلة: مرفوضة بلا أي كتابة', async () => {
+  await freshVault();
+  await V.saveNow(DATA);
+  V.lock();
+  const before = storageText(LS);
+  const r = await V.enable2FA({ password: PW });
+  assert(r.ok === false, 'مرفوضة والمقفلة');
+  eq(storageText(LS), before, 'لا كتابة');
+  assert(V.has2FA() === false, 'لم تُفعّل');
+});
+
+await test('disable2FA (بالرمز — من الإعدادات): رمز خطأ مرفوض، والصحيح يعطّل', async () => {
+  const s = await freshVault({ enable2FA: true });
+  const secret = s.totpSecret;
+  await V.saveNow(DATA);
+  const before = storageText(LS);
+  SS.clear();
+  await expectFail(V.disable2FA({ password: PW, code: codeNotInWindow(secret) }), 'bad-code', 'رمز خطأ');
+  await expectFail(V.disable2FA({ password: PW + 'x', code: V.totp.code(secret) }), 'bad-password', 'كلمة خطأ');
+  eq(storageText(LS), before, 'لا تغيير بعد المحاولات الفاشلة');
+  assert(V.has2FA() === true, 'الثنائية باقية');
+  SS.clear();
+  const r = await V.disable2FA({ password: PW, code: V.totp.code(secret) });
+  assert(r.ok === true, 'تعطيل بالرمز: ' + JSON.stringify(r));
+  assert(V.has2FA() === false, 'has2FA=false');
+  SS.clear();
+  V.lock();
+  eq(await V.unlock({ password: PW }), { ok: true }, 'فتح بكلمة السر فقط');
+  eq(await V.load(), DATA, 'نفس البيانات');
+});
+
+/* --- انحدارات أصلحتها أثناء هذه المراجعة --- */
+
+await test('انحدار: digits/period المخصّصان يُحترمان في الفتح (كان قفلاً دائماً)', async () => {
+  await freshVault();
+  await V.saveNow(DATA);
+  const r = await V.enable2FA({ password: PW, digits: 8, period: 60 });
+  assert(r.ok === true, 'تفعيل بـ8 أرقام/60ث: ' + JSON.stringify(r));
+  assert(r.digits === 8 && r.period === 60, 'المعاملات المُعادة');
+  assert(/digits=8/.test(r.otpauthURI) && /period=60/.test(r.otpauthURI), 'الـURI يحمل digits/period');
+  const v = vaultRaw();
+  assert(v.totp.digits === 8 && v.totp.period === 60, 'المعاملات مخزَّنة');
+  assert(v.totp.secret !== r.totpSecret, 'السرّ مشفّر');
+  V.lock(); SS.clear();
+  const code8 = V.totp.code(r.totpSecret, { digits: 8, period: 60 });
+  assert(code8.length === 8, 'رمز من 8 أرقام');
+  eq(await V.unlock({ password: PW, code: code8 }), { ok: true }, 'فتح برمز 8 أرقام/60ث');
+  eq(await V.load(), DATA, 'البيانات');
+  // والتعطيل بالرمز (مسار الإعدادات) يحترم المعاملات المخصّصة أيضاً
+  V.lock(); SS.clear();
+  eq(await V.disable2FA({ password: PW, code: code8 }), { ok: true }, 'disable2FA برمز 8/60');
+  SS.clear();
+  eq(await V.unlock({ password: PW }), { ok: true }, 'فتح بكلمة السر فقط بعد التعطيل');
+  // ثم تفعيل مخصّص آخر والتعطيل بمخرج الطوارئ (كلمة السر وحدها)
+  const again = await V.enable2FA({ password: PW, digits: 7, period: 45 });
+  assert(again.ok === true, 'تفعيل 7/45');
+  V.lock(); SS.clear();
+  eq(await V.disable2FAWithPassword({ password: PW }), { ok: true }, 'تعطيل مع معاملات مخصّصة');
+  SS.clear();
+  eq(await V.unlock({ password: PW }), { ok: true }, 'فتح بكلمة السر فقط');
+  eq(await V.load(), DATA, 'البيانات سليمة في كل الحالات');
+});
+
+await test('انحدار: enable2FA يرفض سرّاً غير صالح أو قصيراً (كان يُنشئ قفلاً دائماً)', async () => {
+  await freshVault();
+  await V.saveNow(DATA);
+  const before = storageText(LS);
+  const bad1 = await V.enable2FA({ password: PW, secret: 'ليس-سرّاً-صالحاً!!' });
+  assert(bad1.ok === false, 'سرّ غير Base32 مرفوض');
+  const bad2 = await V.enable2FA({ password: PW, secret: 'AAAA' });
+  assert(bad2.ok === false, 'سرّ قصير (2 بايت) مرفوض');
+  eq(storageText(LS), before, 'لا تغيير في البايتات');
+  assert(V.has2FA() === false, 'لم تُفعّل');
+  // ولا يمنع تفعيلاً صحيحاً بعده
+  const good = await V.enable2FA({ password: PW });
+  assert(good.ok === true, 'تفعيل عادي بعد المحاولتين');
+  V.lock(); SS.clear();
+  eq(await V.unlock({ password: PW, code: V.totp.code(good.totpSecret) }), { ok: true }, 'فتح بالرمز');
+});
+
+await test('انحدار: سرّ صالح مُمرَّر من الخارج (متجه RFC) يعمل من الطرفين', async () => {
+  const rfcSecret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
+  await freshVault();
+  await V.saveNow(DATA);
+  const r = await V.enable2FA({ password: PW, secret: rfcSecret });
+  assert(r.ok === true, 'تفعيل بسرّ صالح: ' + JSON.stringify(r));
+  eq(r.totpSecret, rfcSecret, 'نفس السرّ');
+  V.lock(); SS.clear();
+  eq(await V.unlock({ password: PW, code: V.totp.code(rfcSecret) }), { ok: true }, 'فتح برمز السرّ المُمرَّر');
+  eq(await V.load(), DATA, 'البيانات');
+  V.lock(); SS.clear();
+  assert((await V.disable2FAWithPassword({ password: PW })).ok === true, 'تعطيل');
 });
 
 /* ===========================================================================

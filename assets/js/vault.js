@@ -70,6 +70,7 @@
   var TOTP_DIGITS = 6;
   var TOTP_PERIOD = 30;
   var TOTP_SECRET_LEN = 20;   // 20 بايت = 160 بت (المعيار)
+  var MIN_TOTP_SECRET_BYTES = 16; // أدنى سرّ مقبول من الخارج (128 بت — RFC 4226 §4 R6)
   var TOTP_WINDOW = 1;
 
   var ISSUER = 'مصروفي';
@@ -477,6 +478,15 @@
     if (!secretText) return null;
     try { return b32decode(secretText); } catch (e) { return null; }
   }
+  // معاملات الرمز المخزَّنة في الخزنة (6 أرقام/30ث افتراضاً) — تُحترم في كل تحقق،
+  // وإلا لَقَفل المستخدم خارج خزنته لو فعّل ثنائية بـ digits/period مخصّصين.
+  function totpParamsOf(rec) {
+    return { digits: digitsOf(rec && rec.digits), period: periodOf(rec && rec.period) };
+  }
+  function verifyStoredCode(secretText, code, rec) {
+    var p = totpParamsOf(rec);
+    return totpVerify(secretText, code, { window: TOTP_WINDOW, digits: p.digits, period: p.period });
+  }
 
   /* ==========================================================================
    * 7) حالة عامة
@@ -561,7 +571,7 @@
           deriveVerifier(kekpw)
         ]).then(function (parts) {
           var secretEnc = parts[0], kekBytes = parts[1], verifier = parts[2];
-          if (secretBytes) zero(kekpw); // في حالة 2FA يكون KEK مصفوفة منفصلة
+          if (secretBytes) { zero(kekpw); zero(secretBytes); } // KEK مصفوفة منفصلة عند 2FA
 
           return aesKey(kekBytes, ['encrypt']).then(function (kekKey) {
             zero(kekBytes);
@@ -605,7 +615,10 @@
                   var out = { ok: true };
                   if (secretText) {
                     out.totpSecret = secretText;
-                    out.otpauthURI = otpauthURI({ secret: secretText, username: name, issuer: ISSUER });
+                    out.otpauthURI = otpauthURI({
+                      secret: secretText, username: name, issuer: ISSUER,
+                      digits: TOTP_DIGITS, period: TOTP_PERIOD
+                    });
                   }
                   return out;
                 });
@@ -625,6 +638,7 @@
       return aesKey(kekBytes, ['decrypt']).then(function (kekKey) {
         zero(kekBytes);
         zero(kekpw);
+        zero(secretBytes);
         return aesDecrypt(kekKey, vault.wrap.iv, vault.wrap.ct);
       });
     }).then(function (mkBytes) {
@@ -673,7 +687,7 @@
           if (!secretRec) return openWith(kekpw, null, vault);
 
           return decryptSecret(kekpw, secretRec).then(function (secretText) {
-            if (!totpVerify(secretText, code, { window: TOTP_WINDOW })) {
+            if (!verifyStoredCode(secretText, code, secretRec)) {
               zero(kekpw);
               registerFailure();
               return fail('رمز المصادقة الثنائية غير صحيح', 'bad-code');
@@ -772,7 +786,7 @@
           }
           return (secretRec ? decryptSecret(kekpwOld, secretRec) : Promise.resolve(null))
             .then(function (secretText) {
-              if (secretRec && !totpVerify(secretText, code, { window: TOTP_WINDOW })) {
+              if (secretRec && !verifyStoredCode(secretText, code, secretRec)) {
                 zero(kekpwOld); registerFailure();
                 return fail('رمز المصادقة الثنائية غير صحيح', 'bad-code');
               }
@@ -794,6 +808,7 @@
                     deriveVerifier(kekpwNew)
                   ]).then(function (parts) {
                     var secretEnc = parts[0], kekNew = parts[1], verifier = parts[2];
+                    zero(secretBytes);
                     return aesKey(kekNew, ['encrypt']).then(function (kekKey) {
                       zero(kekNew);
                       return aesEncrypt(kekKey, mkBytes).then(function (wrapRec) {
@@ -870,7 +885,7 @@
           }
           var secretRec = totpSecretOf(vault);
           return decryptSecret(kekpw, secretRec).then(function (secretText) {
-            if (!totpVerify(secretText, code, { window: TOTP_WINDOW })) {
+            if (!verifyStoredCode(secretText, code, secretRec)) {
               zero(kekpw); registerFailure();
               return fail('رمز المصادقة الثنائية غير صحيح', 'bad-code');
             }
@@ -879,6 +894,7 @@
             return deriveKEK(kekpw, secretBytes).then(function (kekOld) {
               return aesKey(kekOld, ['decrypt']).then(function (k) {
                 zero(kekOld);
+                zero(secretBytes);
                 return aesDecrypt(k, vault.wrap.iv, vault.wrap.ct);
               });
             }).then(function (mkBytes) {
@@ -922,6 +938,190 @@
         });
       });
     }).catch(function () { return fail('تعذّر تعطيل المصادقة الثنائية'); });
+  }
+
+  /* ==========================================================================
+   * 11ج) مخرج الطوارئ: تعطيل الثنائية بكلمة السر وحدها (بلا رمز)
+   * ========================================================================
+   * الغرض: من سجّل الثنائية وتخطّى تأكيدها (أو ضاع هاتفه) فيبقى قادراً على
+   * الوصول لبياناته بكلمة السر. لا يفتح شيئاً بلا كلمة السر الصحيحة.
+   * ملاحظة أمنية: من يعرف كلمة السر يستطيع بهذه الدالة تعطيل الثنائية —
+   * وهذا مقبول لأن كلمة السر هي العامل الأساسي، والمستخدم قد اختار بلا هاتف.
+   * ======================================================================== */
+  function disable2FAWithPassword(opts) {
+    opts = opts || {};
+    return Promise.resolve().then(function () {
+      if (!isSupported()) return fail('Web Crypto غير مدعوم في هذا المتصفح');
+      var vault = readVault();
+      if (!vault || !vault.wrap || !vault.salt || !vault.verifier) {
+        return fail('لا توجد خزنة على هذا الجهاز', 'not-configured');
+      }
+      var left = lockRemainingMs();
+      if (left > 0) return fail('محاولات كثيرة — انتظر ' + Math.ceil(left / 1000) + ' ثانية', 'locked-out');
+      var secretRec = totpSecretOf(vault);
+      if (!secretRec) return { ok: true, already: true };
+
+      var password = String(opts.password === null || opts.password === undefined ? '' : opts.password);
+      if (!password) return fail('أدخل كلمة السر');
+
+      return pbkdf2(password, b64d(vault.salt), iterOf(vault)).then(function (kekpw) {
+        return checkVerifier(kekpw, vault).then(function (okPw) {
+          if (!okPw) {
+            zero(kekpw);
+            registerFailure();
+            return fail('كلمة السر غير صحيحة', 'bad-password');
+          }
+          return decryptSecret(kekpw, secretRec).then(function (secretText) {
+            var secretBytes = totpSecretBytes(secretText);
+            return deriveKEK(kekpw, secretBytes).then(function (kekOld) {
+              return aesKey(kekOld, ['decrypt']).then(function (k) {
+                zero(kekOld);
+                zero(secretBytes);
+                return aesDecrypt(k, vault.wrap.iv, vault.wrap.ct);
+              });
+            }).then(function (mkBytes) {
+              var salt2 = random(SALT_LEN);
+              return pbkdf2(password, salt2, ITER).then(function (kekpwNew) {
+                return Promise.all([deriveKEK(kekpwNew, null), deriveVerifier(kekpwNew)]).then(function (parts) {
+                  var kekNew = parts[0], verifier = parts[1];
+                  return aesKey(kekNew, ['encrypt']).then(function (kekKey) {
+                    zero(kekNew);
+                    return aesEncrypt(kekKey, mkBytes).then(function (wrapRec) {
+                      zero(mkBytes);
+                      zero(kekpwNew);
+                      zero(kekpw);
+                      var now = nowISO();
+                      vault.salt = b64(salt2);
+                      vault.iter = ITER;
+                      vault.kdf = KDF_NAME;
+                      vault.verifier = b64(verifier);
+                      vault.wrap = wrapRec;
+                      vault.updatedAt = now;
+                      delete vault.totp;
+                      try {
+                        writeVault(vault);
+                        var m = readMeta();
+                        if (m) { m.iter = ITER; m.updatedAt = now; m.has2fa = false; writeMeta(m); }
+                      } catch (e) {
+                        return fail('تعذّر الكتابة في التخزين المحلي');
+                      }
+                      clearFailures();
+                      return { ok: true };
+                    });
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+    }).catch(function () { return fail('تعذّر تعطيل المصادقة الثنائية'); });
+  }
+
+  /* ==========================================================================
+   * 11د) تفعيل الثنائية لاحقاً (من الإعدادات) — بلا إعادة تشفير البيانات
+   * ========================================================================
+   * يولّد سرّاً جديداً، يعيد لفّ MK بمفتاح يدمج السرّ، ويرجّع السرّ للمستخدم
+   * ليضيفه في تطبيق المصادقة. لا تُطلب البيانات مرتين.
+   * ======================================================================== */
+  function enable2FA(opts) {
+    opts = opts || {};
+    return Promise.resolve().then(function () {
+      if (!isSupported()) return fail('Web Crypto غير مدعوم في هذا المتصفح');
+      var vault = readVault();
+      if (!vault || !vault.wrap || !vault.salt || !vault.verifier) {
+        return fail('لا توجد خزنة على هذا الجهاز', 'not-configured');
+      }
+      if (totpSecretOf(vault)) return fail('المصادقة الثنائية مفعّلة بالفعل');
+      var left = lockRemainingMs();
+      if (left > 0) return fail('محاولات كثيرة — انتظر ' + Math.ceil(left / 1000) + ' ثانية', 'locked-out');
+
+      var password = String(opts.password === null || opts.password === undefined ? '' : opts.password);
+      if (!password) return fail('أدخل كلمة السر');
+      if (!isUnlocked()) return fail('افتح الخزنة أولاً', 'locked-out');
+
+      // سرّ مُمرَّر من الخارج (أو مُولَّد): لا بد أن يكون Base32 صالحاً بطول كافٍ،
+      // وإلا أُنشئت ثنائية لا يمكن التحقق من رمزها أبداً ⇒ قفل لا مخرج منه إلا بكلمة السر.
+      var fromCaller = (opts.secret !== undefined && opts.secret !== null && String(opts.secret) !== '');
+      var secretText = fromCaller ? String(opts.secret).trim().toUpperCase().replace(/\s/g, '') : generateSecret();
+      var secretBytes = totpSecretBytes(secretText);
+      if (!secretBytes || secretBytes.length < MIN_TOTP_SECRET_BYTES) {
+        return fail('سرّ المصادقة غير صالح — يجب أن يكون Base32 بطول ' +
+          (MIN_TOTP_SECRET_BYTES * 8 / 5) + ' محرفاً على الأقل');
+      }
+      var digits = digitsOf(opts.digits);
+      var period = periodOf(opts.period);
+
+      return pbkdf2(password, b64d(vault.salt), iterOf(vault)).then(function (kekpw) {
+        return checkVerifier(kekpw, vault).then(function (okPw) {
+          if (!okPw) {
+            zero(kekpw);
+            registerFailure();
+            return fail('كلمة السر غير صحيحة', 'bad-password');
+          }
+          return deriveKEK(kekpw, null).then(function (kekOld) {
+            return aesKey(kekOld, ['decrypt']).then(function (k) {
+              zero(kekOld);
+              return aesDecrypt(k, vault.wrap.iv, vault.wrap.ct);
+            });
+          }).then(function (mkBytes) {
+            var salt2 = random(SALT_LEN);
+            return pbkdf2(password, salt2, ITER).then(function (kekpwNew) {
+              return Promise.all([
+                encryptSecret(kekpwNew, secretText),
+                deriveKEK(kekpwNew, secretBytes),
+                deriveVerifier(kekpwNew)
+              ]).then(function (parts) {
+                var secretEnc = parts[0], kekNew = parts[1], verifier = parts[2];
+                zero(secretBytes); // لم نعد نحتاجه بعد HMAC
+                return aesKey(kekNew, ['encrypt']).then(function (kekKey) {
+                  zero(kekNew);
+                  return aesEncrypt(kekKey, mkBytes).then(function (wrapRec) {
+                    zero(mkBytes);
+                    zero(kekpwNew);
+                    zero(kekpw);
+                    var now = nowISO();
+                    vault.salt = b64(salt2);
+                    vault.iter = ITER;
+                    vault.kdf = KDF_NAME;
+                    vault.verifier = b64(verifier);
+                    vault.wrap = wrapRec;
+                    vault.updatedAt = now;
+                    vault.totp = {
+                      enabled: true,
+                      secret: secretEnc.ct,
+                      secretIv: secretEnc.iv,
+                      digits: digits,
+                      period: period,
+                      algo: TOTP_ALGO,
+                      wrappedAt: now
+                    };
+                    try {
+                      writeVault(vault);
+                      var m = readMeta();
+                      if (m) { m.iter = ITER; m.updatedAt = now; m.has2fa = true; writeMeta(m); }
+                    } catch (e) {
+                      return fail('تعذّر الكتابة في التخزين المحلي');
+                    }
+                    clearFailures();
+                    return {
+                      ok: true,
+                      totpSecret: secretText,
+                      otpauthURI: otpauthURI({
+                        secret: secretText, username: (readMeta() || {}).username || 'masrofi',
+                        issuer: ISSUER, digits: digits, period: period
+                      }),
+                      digits: digits,
+                      period: period
+                    };
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+    }).catch(function () { return fail('تعذّر تفعيل المصادقة الثنائية'); });
   }
 
   /* ==========================================================================
@@ -979,7 +1179,7 @@
           }
           return (secretRec ? decryptSecret(kekpw, secretRec) : Promise.resolve(null))
             .then(function (secretText) {
-              if (secretRec && !totpVerify(secretText, code, { window: TOTP_WINDOW })) {
+              if (secretRec && !verifyStoredCode(secretText, code, secretRec)) {
                 zero(kekpw);
                 return fail('رمز المصادقة الثنائية غير صحيح', 'bad-code');
               }
@@ -988,6 +1188,7 @@
                 return aesKey(kekBytes, ['decrypt']).then(function (kekKey) {
                   zero(kekBytes);
                   zero(kekpw);
+                  zero(secretBytes);
                   return aesDecrypt(kekKey, vault.wrap.iv, vault.wrap.ct);
                 });
               }).then(function (mkBytes) {
@@ -1064,6 +1265,8 @@
 
     changePassword: changePassword,
     disable2FA: disable2FA,
+    disable2FAWithPassword: disable2FAWithPassword,
+    enable2FA: enable2FA,
     exportEncrypted: exportEncrypted,
     importEncrypted: importEncrypted,
     reset: reset,

@@ -14,7 +14,7 @@
   /* ---------------------------------------------------------------- أساسيات */
   C.APP_NAME = 'مصروفي';
   C.APP_TAGLINE = 'إيرادات، مصروفات، وادخار — بلا ورق';
-  C.VERSION = '1.1.0';
+  C.VERSION = '1.1.1';
   C.SCHEMA_VERSION = 1;
   C.STORAGE_KEY = 'finapp.v1';
   C.LOCALE = 'ar-LY';

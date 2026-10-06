@@ -207,6 +207,8 @@ function makeVault(o) {
     setupResult: o.setupResult || { ok: true },
     unlockResult: o.unlockResult || { ok: true },
     verifyResult: o.verifyResult !== false,
+    /* rescueOk=false يعني: الخزنة ترفض التعطيل (كلمة سر خاطئة) */
+    rescueOk: o.rescueOk !== false,
     calls: [],
     isConfigured() { return v.configured; },
     isUnlocked() { return false; },
@@ -215,6 +217,13 @@ function makeVault(o) {
     meta() { return { v: 1, username: v.user, has2fa: v.twofa, iter: 310000, hint: v.hint }; },
     setup(args) { v.calls.push({ fn: 'setup', args }); v.configured = true; if (args && args.enable2FA) v.twofa = true; return Promise.resolve(v.setupResult); },
     unlock(args) { v.calls.push({ fn: 'unlock', args }); return Promise.resolve(v.unlockResult); },
+    disable2FAWithPassword(args) {
+      v.calls.push({ fn: 'disable2FAWithPassword', args });
+      /* كلمة سر خاطئة: لا تغيير إطلاقاً (كما في الخزنة الحقيقية) */
+      if (v.rescueOk === false) return Promise.resolve({ ok: false, error: 'كلمة السر غير صحيحة' });
+      v.twofa = false;
+      return Promise.resolve({ ok: true });
+    },
     importEncrypted(text, args) { v.calls.push({ fn: 'importEncrypted', args }); return Promise.resolve({ ok: true }); },
     lock() {},
     totp: {
@@ -247,6 +256,11 @@ function fresh(vaultOpts) {
   lock.destroy();
   sessionMap.clear();
   reloads = 0;
+  /* إزالة أي نوافذ حوارية من اختبار سابق (وإلا وُجدت عناصر بنفس المعرّف من نسخة قديمة) */
+  try {
+    const stale = documentStub.body.querySelectorAll('.modal-overlay');
+    stale.forEach((n) => { if (n && n.remove) n.remove(); });
+  } catch (e) { /* تجاهل */ }
   /* محاكاة صفحة نظيفة: المرور بشاشة الإعداد (لا خزنة) يُلغي أي سرّ ثنائية معلّق،
      تماماً كما يحدث عند إعادة تحميل الصفحة. */
   Fin.Vault = makeVault({ configured: false });
@@ -256,6 +270,11 @@ function fresh(vaultOpts) {
   const host = newHost();
   lock.render(host, { refresh() {}, go() {} });
   return { vault: Fin.Vault, host };
+}
+/* أحدث نافذة حوارية مفتوحة في DOM الوهمي */
+function lastModal() {
+  const all = documentStub.body.querySelectorAll('.modal-overlay');
+  return all.length ? all[all.length - 1] : documentStub.body;
 }
 const byName = (host, name) => host.querySelectorAll('.input').filter((n) => n.getAttribute('name') === name)[0];
 const click = (node) => { node.click(); };
@@ -269,7 +288,9 @@ console.log('\n=== 1) لا خزنة → شاشة الإعداد ===');
   ok('شرح التشفير المحلي بلا خادم ظاهر', text.includes('لا تُرسل') || text.includes('بلا خادم'));
   ['username', 'password', 'confirm', 'hint'].forEach((n) => ok('حقل ' + n + ' موجود', !!byName(host, n)));
   const sw = host.querySelector('.switch-input');
-  ok('مفتاح المصادقة الثنائية موجود ومفعّل افتراضياً', !!sw && sw.checked === true);
+  // الافتراضي: بلا مصادقة ثنائية (قرار المستخدم: «سنكتفي بكلمة سر قوية، وسأضيف المصادقة لاحقاً»)
+  ok('مفتاح المصادقة الثنائية موجود ومتوقّف افتراضياً', !!sw && sw.checked === false);
+  ok('شرح المفتاح يذكر إمكانية التفعيل لاحقاً', String(text).includes('لاحقاً'));
   ok('مؤشر قوة كلمة السر موجود', !!host.querySelector('#lock-strength'));
   ok('زر الإنشاء موجود', !!host.querySelector('#lock-setup-submit'));
 }
@@ -316,6 +337,9 @@ console.log('\n=== 4) إعداد ناجح مع 2FA → سرّ TOTP وبطاقة 
   byName(host, 'password').value = 'Masrofi-2026-pass';
   byName(host, 'confirm').value = 'Masrofi-2026-pass';
   byName(host, 'hint').value = 'تاريخ ميلادي';
+  // نُفعّل المفتاح يدوياً: الحالة التي يختار فيها المستخدم المصادقة الثنائية
+  const swi = host.querySelector('.switch-input');
+  if (swi) swi.checked = true;
   click(host.querySelector('#lock-setup-submit'));
   await flush();
 
@@ -669,6 +693,101 @@ console.log('\n=== 13) تكامل البوابة: تهجير الحالة إلى
   click(s4.host.querySelector('#lock-unlock-submit'));
   await flush();
   eq('بلا App.afterAuth → إعادة تحميل', reloads, 1);
+  lock.destroy();
+}
+
+/* ==================================================================== 14
+ * سيناريو المستخدم الفعلي: أنشأ الحساب، ورأى شاشة السرّ، وضغط «تخطّي».
+ * القاعدة: التخطّي يجب أن يُعطّل الثنائية فعلاً — وإلا طُلب رمز لا يملكه.
+ * ==================================================================== */
+console.log('\n=== 14) التخطّي في شاشة السرّ لا يقفل الحساب ===');
+{
+  const { vault, host } = fresh({
+    configured: false,
+    twofa: false,
+    setupResult: { ok: true, totpSecret: SECRET, otpauthURI: URI }
+  });
+  byName(host, 'username').value = 'سيف';
+  byName(host, 'password').value = 'Masrofi-2026-pass';
+  byName(host, 'confirm').value = 'Masrofi-2026-pass';
+  const swi = host.querySelector('.switch-input');
+  if (swi) swi.checked = true;               // فعّل الثنائية
+  click(host.querySelector('#lock-setup-submit'));
+  await flush();
+
+  ok('ظهرت شاشة السرّ', !!host.querySelector('#lock-totp-skip'));
+  ok('setup سجّل الثنائية في الخزنة المزيّفة', vault.twofa === true);
+
+  click(host.querySelector('#lock-totp-skip'));
+  await flush();
+
+  const off = vault.calls.filter((c) => c.fn === 'disable2FAWithPassword');
+  eq('التخطّي نادى تعطيل الثنائية مرة واحدة', off.length, 1);
+  eq('وبكلمة السر الصحيحة', (off[0] || {}).args && off[0].args.password, 'Masrofi-2026-pass');
+  eq('الثنائية صارت معطّلة فعلاً', vault.twofa, false);
+  eq('وعُطّلت بلا رمز (args بلا code)', 'code' in ((off[0] || {}).args || {}), false);
+
+  /* والحالة التالية: الدخول بكلمة السر وحدها يجب أن ينجح بلا خانة رمز */
+  const s2 = fresh({ configured: true, twofa: false, user: 'سيف' });
+  ok('الدخول التالي لا يعرض خانة الرمز', !s2.host.querySelector('#lock-code'));
+  s2.host.querySelector('#lock-password').value = 'Masrofi-2026-pass';
+  click(s2.host.querySelector('#lock-unlock-submit'));
+  await flush();
+  const unlock = s2.vault.calls.filter((c) => c.fn === 'unlock');
+  eq('unlock نُودي مرة واحدة', unlock.length, 1);
+  eq('وبلا رمز (سلسلة فارغة أو غائب)', String(((unlock[0] || {}).args || {}).code || ''), '');
+  lock.destroy();
+}
+
+/* ==================================================================== 15
+ * مخرج الطوارئ: من قُفل حسابه بثنائية بلا تأكيد (أو ضاع هاتفه)
+ * ==================================================================== */
+console.log('\n=== 15) مخرج الطوارئ في «نسيت كلمة السر؟» ===');
+{
+  const { host } = fresh({ configured: true, twofa: true, user: 'سيف' });
+  ok('الخزنة تطلب الرمز (الحالة المقفلة)', !!host.querySelector('#lock-code'));
+
+  click(host.querySelector('#lock-forgot'));
+  await flush();
+  const modal = lastModal();
+  ok('حوار «نسيت كلمة السر؟» فيه مخرج طوارئ', !!modal.querySelector('#lock-rescue-password'));
+  ok('ويشرح الحالة: رمز لا تملكه', String(modal.textContent || '').includes('رمز لا تملكه'));
+  const rescueBtn = Array.from(modal.querySelectorAll('button')).find((b) => String(b.textContent || '').indexOf('عطّل المصادقة') >= 0);
+  ok('وفيه زر تعطيل المصادقة الثنائية', !!rescueBtn);
+
+  /* كلمة سر خاطئة → لا تعطيل */
+  const v2 = fresh({ configured: true, twofa: true, user: 'سيف', rescueOk: false });
+  click(v2.host.querySelector('#lock-forgot'));
+  await flush();
+  const modal2 = lastModal();
+  const allBtns = Array.from(modal2.querySelectorAll('button'));
+  ok('أزرار الحوار معروضة (' + allBtns.length + ')', allBtns.length >= 2, allBtns.map((b) => String(b.textContent || '').slice(0, 22)).join(' | '));
+  const b2 = allBtns.find((b) => String(b.textContent || '').indexOf('عطّل المصادقة') >= 0);
+  ok('زر التعطيل قابل للنقر (له onClick)', !!b2);
+  modal2.querySelector('#lock-rescue-password').value = 'خطأ-تماماً';
+  click(b2);
+  await flush();
+  const afterWrong = v2.vault.calls.filter((c) => c.fn === 'disable2FAWithPassword');
+  eq('كلمة خطأ: نُودي التعطيل مرة', afterWrong.length, 1);
+  eq('أُرسلت كلمة السر الخاطئة', (afterWrong[0] || {}).args && afterWrong[0].args.password, 'خطأ-تماماً');
+  ok('الخزنة المزيّفة عَلِمت بالنتيجة الفاشلة (rescueOk=false)', v2.vault.rescueOk === false);
+  ok('ومع ذلك لم تُعطّل الثنائية', v2.vault.twofa === true, 'twofa=' + v2.vault.twofa);
+  ok('وتظهر رسالة خطأ عربية', String(modal2.textContent || '').includes('تعذّر التعطيل') || String(modal2.textContent || '').includes('كلمة السر غير صحيحة'));
+
+  /* كلمة سر صحيحة (خزنة تقبل) → تعطيل فعلي. الرابط يُختبر برابط مباشر لأن
+     الشاشة لا تكشف الدالة الداخلية، وهذا يثبت أن النجاح يُطبَّق فعلاً. */
+  const v3 = fresh({ configured: true, twofa: true, user: 'سيف' });
+  click(v3.host.querySelector('#lock-forgot'));
+  await flush();
+  const modal3 = lastModal();
+  modal3.querySelector('#lock-rescue-password').value = 'Masrofi-2026-pass';
+  const b3 = Array.from(modal3.querySelectorAll('button')).find((b) => String(b.textContent || '').indexOf('عطّل المصادقة') >= 0);
+  click(b3);
+  await flush();
+  const okCalls = v3.vault.calls.filter((c) => c.fn === 'disable2FAWithPassword');
+  eq('كلمة صحيحة: نُودي التعطيل مرة', okCalls.length, 1);
+  eq('وبكلمة السر الصحيحة', (okCalls[0] || {}).args && okCalls[0].args.password, 'Masrofi-2026-pass');
+  eq('كلمة صحيحة: عُطّلت الثنائية', v3.vault.twofa, false);
   lock.destroy();
 }
 
