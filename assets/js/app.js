@@ -44,6 +44,7 @@
   App.getView = function (id) { return views[id] || null; };
   App.list = function () { return navOrder.map(function (id) { return views[id]; }); };
   App.currentId = function () { return currentId; };
+  App.isLocked = function () { return !!App.locked; };
 
   // الشاشات تسجّل نفسها في Fin.Views عند التحميل (ARCHITECTURE §4) — الراوتر يتبنّاها هنا.
   // تُستدعى عند الإقلاع وعند أول تنقّل، فلا توجد شاشة تسجّل نفسها ولا تظهر.
@@ -182,6 +183,58 @@
     return h || null;
   }
 
+  /* ============================================================ البوابة
+     إن كانت هناك خزنة مشفّرة ولم تُفتح: لا نُحمّل أي بيانات، ونعرض شاشة القفل.
+     إن لم تكن هناك خزنة: نُكمل عادةً (وتُعرض شاشة الإنشاء من الراوتر). */
+
+  App.lockScreen = function (mode) {
+    App.locked = true;
+    var host = App.container;
+    if (!host) return;
+    if (App.navEl) U.clear(App.navEl);
+    var head = App.headerEl;
+    if (head) head.textContent = (mode === 'setup') ? 'إنشاء حساب' : 'الدخول';
+    var dateEl = document.getElementById('app-date');
+    if (dateEl) dateEl.textContent = '';
+    currentView = { id: 'lock', title: 'الدخول' };
+    U.clear(host);
+    if (views.lock && typeof views.lock.render === 'function') {
+      try {
+        views.lock.render(host, {
+          state: Store.state || null,
+          refresh: function () { App.refresh(); },
+          go: App.go,
+          asOf: U.todayISO(),
+          today: U.todayISO()
+        });
+      } catch (e) {
+        host.appendChild(UI.emptyState('lock', 'تعذّر عرض شاشة الدخول', String(e && e.message || e)));
+      }
+    } else {
+      // احتياط: لو لم تُحمّل شاشة القفل
+      host.appendChild(UI.emptyState('lock', 'التطبيق محمي بكلمة سر',
+        'افتح الملف assets/js/views/lock.js — لم تُحمَّل شاشة الدخول.'));
+    }
+    return true;
+  };
+
+  // تُنادى من شاشة القفل بعد نجاح الدخول أو إنشاء الحساب
+  App.afterAuth = function () {
+    var V = Fin.Vault;
+    if (!V || !V.isUnlocked || !V.isUnlocked()) return Promise.resolve(false);
+    return Promise.resolve(V.load()).then(function (data) {
+      Store.hydrate(data);
+      Store.ensureCharges(U.todayISO());
+      Store.save(true);
+      // ترحيل البيانات القديمة غير المشفّرة: تُحذف بعد أول تشفير ناجح
+      if (Store.hasLegacyData && Store.hasLegacyData()) Store.confirmVaultMigration();
+      App.locked = false;
+      App.startUI();
+      App.go('dashboard', { force: true, replace: true });
+      return true;
+    });
+  };
+
   App.init = function () {
     App.container = document.getElementById('view');
     App.navEl = document.getElementById('nav');
@@ -196,10 +249,51 @@
     // إيقاف أي نطق جارٍ — التطبيق منظومة تسجيل، ولا يصدر صوتاً بلا طلب صريح
     if (Fin.Agent && Fin.Agent.silence) Fin.Agent.silence();
 
-    Store.load();
-    Store.ensureCharges(U.todayISO());
     App.adoptViews();
     UI.theme.init();
+
+    // البوابة: خزنة مشفّرة مقفلة ⇒ لا بيانات ولا شاشات حتى الدخول
+    var V = Fin.Vault;
+    var supported = !!(V && typeof V.isSupported === 'function' && V.isSupported());
+    var configured = !!(V && typeof V.isConfigured === 'function' && V.isConfigured());
+    var unlocked = !!(V && typeof V.isUnlocked === 'function' && V.isUnlocked());
+    // بيانات موجودة فعلاً (بذرة محفوظة أو نسخة قديمة): لا يجوز حبس المستخدم خارجها
+    var hasData = Store.hasLegacyData ? Store.hasLegacyData() : false;
+
+    if (configured && !unlocked) {
+      App.startUI();
+      App.lockScreen('unlock');
+      return;
+    }
+
+    // مستخدم جديد بلا بيانات: نعرض شاشة الإنشاء
+    if (!configured && supported && !hasData && views.lock) {
+      App.startUI();
+      App.lockScreen('setup');
+      return;
+    }
+
+    // بيانات موجودة بلا خزنة: نُحمّلها أولاً، ثم نعرض الإنشاء (مع نقلها مشفّرة).
+    // وإن كان المتصفح لا يدعم التشفير نُكمل بلا حماية بدل حبس المستخدم خارج بياناته.
+    Store.load();
+    Store.ensureCharges(U.todayISO());
+    App.startUI();
+
+    if (!configured && supported && views.lock) {
+      App.lockScreen('setup');
+      return;
+    }
+
+    var first = parseHash() || 'dashboard';
+    if (!views[first]) first = navOrder[0] || 'dashboard';
+    if (!views[first]) first = 'settings';
+    App.go(first, { force: true, replace: true });
+  };
+
+  /* بناء واجهة التطبيق (رأس + اشتراك + اختصارات). تُنادى مرة واحدة. */
+  App.startUI = function () {
+    if (App._uiReady) return;
+    App._uiReady = true;
 
     // أيقونات الرأس التي تشير إلى شاشات بلا تبويب (المساعد مثلاً)
     var linksHost = document.getElementById('header-links');
@@ -238,13 +332,14 @@
 
     // تحديث تلقائي عند أي تغيير في البيانات
     Store.subscribe(function () {
+      if (App.locked) return;
       ctx.state = Store.state;
       ctx.asOf = Fin.Finance.displayDay(Store.state, U.todayISO());
       App.refresh();
       App.renderHeader();
     });
-
     window.addEventListener('hashchange', function () {
+      if (App.locked) return;
       var id = parseHash();
       if (id && id !== currentId && views[id]) App.go(id);
     });
@@ -273,17 +368,6 @@
       }
     });
 
-    var first = parseHash() || 'dashboard';
-    if (!views[first]) first = navOrder[0] || 'dashboard';
-    if (!views[first]) first = 'settings';
-
-    if (!navOrder.length) {
-      App.container.appendChild(UI.emptyState('⏳', 'جارٍ التحميل…', 'لم تُسجَّل أي شاشة بعد'));
-      setTimeout(function () { App.go(first, { force: true, replace: true }); }, 400);
-    } else {
-      App.go(first, { force: true, replace: true });
-    }
-
     // Service Worker (أوفلاين + تثبيت على الجوال)
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', function () {
@@ -297,7 +381,7 @@
     var cat = categoryKey ? C.catExpense(categoryKey) : null;
     var fields = [
       { name: 'amount', label: 'المبلغ', type: 'money', required: true },
-      { name: 'category', label: 'الفئة', type: 'select', value: categoryKey || 'other', options: C.EXPENSE_CATEGORIES.map(function (c) { return { value: c.key, label: c.icon + ' ' + c.label }; }) },
+      { name: 'category', label: 'الفئة', type: 'select', value: categoryKey || 'other', options: C.EXPENSE_CATEGORIES.map(function (c) { return { value: c.key, label: c.label }; }) },
       { name: 'date', label: 'التاريخ', type: 'date', value: U.todayISO(), required: true },
       { name: 'note', label: 'ملاحظة', type: 'text', placeholder: 'اختياري' }
     ];

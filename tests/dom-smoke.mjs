@@ -187,7 +187,7 @@ console.log('\n=== 2) تحميل الشاشات + الوكيل + الراوتر 
 const viewFiles = [
   'assets/js/views/dashboard.js', 'assets/js/views/expenses.js', 'assets/js/views/income.js',
   'assets/js/views/accounts.js', 'assets/js/views/reports.js', 'assets/js/views/domains.js',
-  'assets/js/views/settings.js', 'assets/js/views/agent.js'
+  'assets/js/views/settings.js', 'assets/js/views/agent.js', 'assets/js/views/lock.js'
 ];
 for (const f of viewFiles) {
   try { load(f); ok('حُمّل ' + f, true); }
@@ -201,7 +201,12 @@ for (const f of ['assets/js/agent.js', 'assets/js/app.js']) {
 
 console.log('\n=== 3) الأرقام الحقيقية من البذرة ===');
 const Store = Fin.Store, F = Fin.Finance, U = Fin.U, C = Fin.C;
+// لا خزنة في هذه البيئة ⇒ نتحقق من المسار غير المشفّر (الوضع القديم)
 let st = Store.load();
+if (!st) { // احتياط: لو حُمّل vault.js وأُنشئت خزنة في بيئة الاختبار
+  ok('الخزنة غير مقيّدة في بيئة الاختبار', false, 'Store.load() أعاد null');
+  st = Store.reset();
+}
 const TODAY = '2026-10-05';
 const day = F.daySummary(st, TODAY);
 eq('دخل اليوم', day.income, 3400);
@@ -241,7 +246,7 @@ if (App) {
   App.navEl = documentStub.getElementById('nav');
   App.headerEl = documentStub.getElementById('app-title');
 }
-const ctxObj = { state: st, asOf: TODAY, refresh() {}, go() {}, store: Store, finance: F };
+const ctxObj = { state: st, asOf: TODAY, today: TODAY, refresh() {}, go() {}, store: Store, finance: F };
 
 const expected = {
   dashboard: ['3,098', '8,098', '5,500', '302', 'toolseer.com'],
@@ -319,13 +324,17 @@ if (App && App.adoptViews) {
   ok('الراوتر تبنّى ' + before + ' شاشة تلقائياً عند الإقلاع (وإعادة الاستدعاء أضافت ' + adopted + ')', before >= 6 && adopted === 0, 'قبل: ' + before + ' إضافة: ' + adopted);
   const navIds = App.list().map((v) => v.id);
   ok('الشاشات في الراوتر: ' + navIds.join(' ← '), navIds.length >= 6, 'عدد: ' + navIds.length);
-  const orders = App.list().map((v) => v.order);
-  ok('الترتيب تصاعدي صحيح', orders.every((o, i) => i === 0 || orders[i - 1] <= o), JSON.stringify(orders));
-  ok('لوحة اليوم أولاً', navIds[0] === 'dashboard', 'الأول: ' + navIds[0]);
+  // الترتيب التصاعدي يُفحص على الشاشات الظاهرة فقط (شاشة الدخول مخفيّة order 0)
+  const visibleOrders = App.list().filter((v) => !v.hidden).map((v) => v.order);
+  ok('ترتيب الشاشات الظاهرة تصاعدي', visibleOrders.every((o, i) => i === 0 || visibleOrders[i - 1] <= o), JSON.stringify(visibleOrders));
+  // شاشة الدخول مخفيّة (order 0) فلا تُحسب تبويباً
+  const tabs = App.tabIds();
+  ok('لوحة اليوم أولاً في التبويبات', tabs[0] === 'dashboard', 'الأول: ' + tabs[0]);
   const missing = C.NAV.map((n) => n.id).filter((id) => !navIds.includes(id));
   ok('كل تبويبات C.NAV لها شاشة' + (missing.length ? ' — الناقص: ' + missing.join(', ') : ''), missing.length === 0);
-  ok('تبويبات الشريط السفلي = C.NAV_ORDER', JSON.stringify(App.tabIds()) === JSON.stringify(C.NAV_ORDER), JSON.stringify(App.tabIds()));
-  ok('المساعد ليس تبويباً لكنه متاح', App.tabIds().indexOf('agent') < 0 && !!Fin.Views.agent);
+  ok('تبويبات الشريط السفلي = C.NAV_ORDER', JSON.stringify(tabs) === JSON.stringify(C.NAV_ORDER), JSON.stringify(tabs));
+  ok('المساعد ليس تبويباً لكنه متاح', tabs.indexOf('agent') < 0 && !!Fin.Views.agent);
+  ok('شاشة الدخول مسجّلة ومخفيّة عن التبويبات', !!Fin.Views.lock && Fin.Views.lock.hidden === true && tabs.indexOf('lock') < 0);
 }
 
 console.log('\n=== 8) ثبات الأرقام بعد عملية تحصيل (اختبار حقيقي على الحالة) ===');

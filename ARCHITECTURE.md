@@ -51,16 +51,34 @@ C:\vpn\safe\
    └─ screenshots/            # [verify] صور الشاشات
 ```
 
-## 3. نموذج البيانات (localStorage key: `finapp.v1`)
+## 3. نموذج البيانات
+
+### أين تُخزَّن البيانات؟ (مهم — تغيّر في v1.1)
+
+| الحالة | المفتاح | مشفّر؟ |
+|---|---|---|
+| **مستخدم أنشأ حساباً** (الوضع الطبيعي) | `masrofi.vault.v1` + `masrofi.vault.meta` | ✅ **نعم** — AES-GCM 256 |
+| أول تشغيل قبل إنشاء الحساب | `finapp.v1` | لا (يُحذف تلقائياً بعد أول تشفير ناجح) |
+| مهلة العرض المؤقتة (اليوم المعروض في اللوحة) | `sessionStorage: masrofi.dashDay` | لا |
+
+عقد التشفير والدخول كامل في **[docs/AUTH.md](docs/AUTH.md)** — اقرأه قبل لمس `vault.js` أو `store.js`.
+
+**قواعد ملزمة:**
+1. `Store.load()` تُعيد `null` إن كانت الخزنة موجودة ومقفلة — و`app.js` يعرض شاشة القفل بلا تحميل أي بيانات.
+2. `Store.hydrate(data)` بعد `Vault.unlock` أو إنشاء الحساب.
+3. `Store.save()` **لا يكتب شيئاً** إن كانت الخزنة مقفلة، ويمرّ عبر `Vault.save` إن كانت مفتوحة.
+4. `Vault.setup({ state })` **إلزامي** لتمرير `Store.snapshotForVault()` وإلا ضاعت بيانات ما قبل الخزنة.
+
+### شكل الحالة (داخل الخزنة المشفّرة أو في `finapp.v1` قبل التشفير)
 
 ```jsonc
 {
   "version": 1,
   "settings": {
-    "theme": "dark",              // "dark" | "light" | "auto"
+    "theme": "light",             // "dark" | "light" | "auto"
     "currency": "LYD",
     "locale": "ar-LY",
-    "agent": { "provider": "deepseek", "model": "deepseek-chat", "apiKey": "", "voice": true },
+    "agent": { "provider": "deepseek", "model": "deepseek-chat", "apiKey": "", "voice": false },
     "domain": ""
   },
   "accounts": [

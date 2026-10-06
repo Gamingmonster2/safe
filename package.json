@@ -10,9 +10,11 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node tests/check.mjs && node tests/dom-smoke.mjs && node tests/selftest-agent.mjs && node tests/selftest-pwa.mjs",
+    "test": "node tests/check.mjs && node tests/dom-smoke.mjs && node tests/vault.crypto.mjs && node tests/lock.ui.mjs && node tests/selftest-agent.mjs && node tests/selftest-pwa.mjs",
     "test:numbers": "node tests/check.mjs",
     "test:views": "node tests/dom-smoke.mjs",
+    "test:crypto": "node tests/vault.crypto.mjs",
+    "test:lock": "node tests/lock.ui.mjs",
     "test:agent": "node tests/selftest-agent.mjs",
     "test:pwa": "node tests/selftest-pwa.mjs",
     "audit": "node tests/tools/render-audit.mjs",

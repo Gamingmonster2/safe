@@ -20,6 +20,157 @@
 
   function saveSettings(patch) { Store.updateSettings(patch); }
 
+  function closeModalQuiet() {
+    var overlay = document.querySelector('.modal-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('is-open');
+    setTimeout(function () { UI.detach(overlay); }, 180);
+  }
+
+  /* ============================================================ الأمان */
+
+  function vault() { return Fin.Vault || null; }
+
+  function securitySection(state) {
+    var V = vault();
+    var configured = !!(V && V.isConfigured && V.isConfigured());
+    var has2fa = !!(V && V.has2FA && V.has2FA());
+    var unsupported = !(V && V.isSupported && V.isSupported());
+
+    if (unsupported) {
+      return UI.section('الأمان والحماية', [
+        U.el('div', { class: 'alert alert-warn' }, [
+          U.el('div', { class: 'alert-ico' }, [icon('alert', { size: 15, tone: 'warn' })]),
+          U.el('div', { class: 'alert-main' }, [
+            U.el('div', { class: 'alert-title', text: 'التشفير غير مدعوم في هذا المتصفح' }),
+            U.el('div', { class: 'alert-body', text: 'هذا المتصفح لا يدعم Web Crypto. بياناتك تُحفظ غير مشفّرة — استخدم متصفحاً حديثاً لتفعيل الحماية.' })
+          ])
+        ])
+      ]);
+    }
+
+    var rows = [
+      U.el('div', { class: 'card' }, [
+        U.el('div', { class: 'card-head' }, [
+          icon(configured ? 'shield' : 'alert', { size: 20, tone: configured ? 'in' : 'warn' }),
+          U.el('div', { class: 'card-title', text: configured ? 'بياناتك مشفّرة' : 'لا توجد حماية بعد' }),
+          U.el('div', { class: 'card-extra' }, [UI.badge(has2fa ? 'مع مصادقة ثنائية' : (configured ? 'كلمة سر فقط' : 'غير محمي'), has2fa ? 'income' : (configured ? 'warn' : 'danger'))])
+        ]),
+        U.el('div', { class: 'card-body' }, [
+          UI.kv('اسم المستخدم', (V.username && V.username()) || '—'),
+          UI.kv('التشفير', 'AES-GCM 256 + PBKDF2-SHA256 (' + ((V.iter && V.iter()) || 310000) + ' دورة)'),
+          UI.kv('المصادقة الثنائية', has2fa ? 'مفعّلة (تطبيق المصادقة)' : 'غير مفعّلة'),
+          U.el('div', { class: 'card-sub', text: configured
+            ? 'كل شيء (الحركات، الأرصدة، النطاقات) مشفّر في هذا المتصفح. لا يمكن فتحه بلا كلمة السر، ولا يُرسَل لأي خادم.'
+            : 'أنشئ حساباً من شاشة الدخول لتفعيل التشفير.' })
+        ])
+      ])
+    ];
+
+    rows.push(U.el('div', { class: 'btn-row' }, [
+      UI.btn('اقفل الآن', { tone: 'primary', icon: 'lock', onClick: function () {
+        if (!configured) { UI.toast('لا توجد خزنة بعد', 'danger'); return; }
+        UI.confirm('سيُقفل التطبيق ويُمسح المفتاح من الذاكرة. متابعة؟', { okLabel: 'اقفل', tone: 'primary' }).then(function (ok) {
+          if (!ok) return;
+          V.lock();
+          location.reload();
+        });
+      } }),
+      UI.btn('تغيير كلمة السر', { tone: 'ghost', icon: 'key', onClick: function () { openChangePassword(V, has2fa); } }),
+      UI.btn(has2fa ? 'عطّل المصادقة الثنائية' : 'المصادقة الثنائية غير مفعّلة', {
+        tone: 'ghost', icon: 'shield', disabled: !has2fa,
+        onClick: function () { openDisable2FA(V); }
+      }),
+      UI.btn('نسخة مشفّرة', { tone: 'ghost', icon: 'download', onClick: function () {
+        Promise.resolve(V.exportEncrypted()).then(function (res) {
+          if (!res || !res.ok) { UI.toast((res && res.error) || 'تعذّر التصدير', 'danger'); return; }
+          U.download('masrofi-vault-' + U.todayISO() + '.json', res.text, 'application/json;charset=utf-8');
+          UI.toast('نُزّلت نسخة مشفّرة — احفظها في مكان آمن', 'success', 4000);
+        });
+      } })
+    ]));
+
+    rows.push(U.el('div', { class: 'alert alert-warn' }, [
+      U.el('div', { class: 'alert-ico' }, [icon('alert', { size: 15, tone: 'warn' })]),
+      U.el('div', { class: 'alert-main' }, [
+        U.el('div', { class: 'alert-title', text: 'احفظ نسخة احتياطية مشفّرة' }),
+        U.el('div', { class: 'alert-body', text: 'لا يوجد خادم يستعيد كلمة السر. إن نسيتها، ملف النسخة الاحتياطية + كلمة السر هما طريقك الوحيد للعودة.' })
+      ])
+    ]));
+
+    return UI.section('الأمان والحماية', rows);
+  }
+
+  function openChangePassword(V, has2fa) {
+    var form = UI.form([
+      { name: 'currentPassword', label: 'كلمة السر الحالية', type: 'password', required: true, autocomplete: 'current-password' },
+      has2fa ? { name: 'code', label: 'رمز المصادقة الثنائية', type: 'text', required: true, placeholder: '6 أرقام' } : null,
+      { name: 'newPassword', label: 'كلمة السر الجديدة', type: 'password', required: true, hint: '8 محارف على الأقل' },
+      { name: 'confirmPassword', label: 'تأكيد كلمة السر الجديدة', type: 'password', required: true }
+    ].filter(Boolean), { values: {} });
+
+    UI.modal({
+      title: 'تغيير كلمة السر',
+      body: U.el('div', {}, [
+        U.el('div', { class: 'muted', text: 'يُعاد لفّ المفتاح فقط — لا تُعاد كتابة البيانات، فالحركات والأرصدة تبقى كما هي.' }),
+        form.el
+      ]),
+      wide: true,
+      actions: [
+        { label: 'إلغاء', tone: 'ghost' },
+        { label: 'تغيير', tone: 'primary', type: 'submit' }
+      ],
+      onSubmit: function () {
+        var v = form.getValues();
+        if (!v.currentPassword || !v.newPassword) { UI.toast('أكمل الحقول', 'danger'); return { ok: false }; }
+        if (String(v.newPassword).length < 8) { UI.toast('كلمة السر الجديدة قصيرة (8 على الأقل)', 'danger'); return { ok: false }; }
+        if (v.newPassword !== v.confirmPassword) { UI.toast('كلمتا السر غير متطابقتين', 'danger'); return { ok: false }; }
+        Promise.resolve(V.changePassword({
+          currentPassword: v.currentPassword, newPassword: v.newPassword, code: v.code
+        })).then(function (res) {
+          if (res && res.ok) { UI.toast('تم تغيير كلمة السر', 'success'); closeModalQuiet(); }
+          else UI.toast((res && res.error) || 'تعذّر التغيير', 'danger', 4200);
+        });
+        return { ok: false };
+      }
+    });
+  }
+
+  function openDisable2FA(V) {
+    var form = UI.form([
+      { name: 'password', label: 'كلمة السر', type: 'password', required: true, autocomplete: 'current-password' },
+      { name: 'code', label: 'رمز المصادقة الثنائية الحالي', type: 'text', required: true, placeholder: '6 أرقام' }
+    ], { values: {} });
+
+    UI.modal({
+      title: 'تعطيل المصادقة الثنائية',
+      body: U.el('div', {}, [
+        U.el('div', { class: 'alert alert-warn' }, [
+          U.el('div', { class: 'alert-ico' }, [icon('alert', { size: 15, tone: 'warn' })]),
+          U.el('div', { class: 'alert-main' }, [
+            U.el('div', { class: 'alert-title', text: 'الحماية ستضعف' }),
+            U.el('div', { class: 'alert-body', text: 'بعد التعطيل تكفي كلمة السر لفتح بياناتك. البيانات تبقى مشفّرة كما هي.' })
+          ])
+        ]),
+        form.el
+      ]),
+      wide: true,
+      actions: [
+        { label: 'إلغاء', tone: 'ghost' },
+        { label: 'عطّل', tone: 'danger', type: 'submit' }
+      ],
+      onSubmit: function () {
+        var v = form.getValues();
+        if (!v.password || !v.code) { UI.toast('أكمل الحقول', 'danger'); return { ok: false }; }
+        Promise.resolve(V.disable2FA({ password: v.password, code: v.code })).then(function (res) {
+          if (res && res.ok) { UI.toast('تم تعطيل المصادقة الثنائية', 'success'); closeModalQuiet(); if (Fin.App) Fin.App.refresh(); }
+          else UI.toast((res && res.error) || 'تعذّر التعطيل', 'danger', 4200);
+        });
+        return { ok: false };
+      }
+    });
+  }
+
   /* --------------------------------------------------------- المظهر */
 
   function appearanceSection(state) {
@@ -285,6 +436,7 @@
       ]));
 
       rootEl.appendChild(appearanceSection(state));
+      rootEl.appendChild(securitySection(state));
       rootEl.appendChild(agentSection(state));
       rootEl.appendChild(backupSection(state));
       rootEl.appendChild(deploySection(state));

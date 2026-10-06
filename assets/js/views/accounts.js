@@ -43,6 +43,106 @@
 
   /* ================================================ نافذة تعديل الحساب */
 
+  /* ======================================= تصحيح رصيد ليطابق الواقع */
+  /* الفكرة: تُدخل الرصيد الفعلي الذي بيدك، ويُسجَّل الفرق كحركة تسوية واضحة
+     (لا نعدّل الأرقام بصمت — فيبقى السجل صادقاً ويظهر سبب الفرق). */
+  function openFixBalanceModal(acc, ctx) {
+    var current = F.balanceOf(ctx.state, acc.id);
+    var form = UI.form([
+      { name: 'actual', label: 'الرصيد الفعلي الآن', type: 'money', required: true, hint: 'المحسوب حالياً: ' + U.fmtMoney(current) },
+      { name: 'date', label: 'تاريخ التسوية', type: 'date', required: true },
+      { name: 'reason', label: 'السبب', type: 'select', options: [
+        { value: 'جرد يدوي', label: 'جرد يدوي / عدّ النقد' },
+        { value: 'مصروف لم أسجّله', label: 'مصروف لم أسجّله' },
+        { value: 'دخل لم أسجّله', label: 'دخل لم أسجّله' },
+        { value: 'تصحيح خطأ إدخال', label: 'تصحيح خطأ إدخال' },
+        { value: 'أخرى', label: 'سبب آخر' }
+      ] },
+      { name: 'note', label: 'ملاحظة', type: 'text', span: 2, placeholder: 'اختياري' }
+    ], { values: { actual: current, date: ctx.asOf || U.todayISO(), reason: 'جرد يدوي', note: '' } });
+
+    UI.modal({
+      title: 'تصحيح رصيد: ' + acc.name,
+      body: U.el('div', {}, [
+        U.el('div', { class: 'alert alert-info' }, [
+          U.el('div', { class: 'alert-ico' }, [icon('info', { size: 15 })]),
+          U.el('div', { class: 'alert-main' }, [
+            U.el('div', { class: 'alert-title', text: 'سيُسجَّل الفرق كحركة تسوية' }),
+            U.el('div', { class: 'alert-body', text: 'إن كان الفعلي أكبر نُسجّل دخلاً، وإن كان أقل نُسجّل مصروفاً — بملاحظة «تسوية» حتى تعرف مصدر الفرق لاحقاً.' })
+          ])
+        ]),
+        form.el
+      ]),
+      wide: true,
+      actions: [
+        { label: 'إلغاء', tone: 'ghost' },
+        { label: 'سجّل التسوية', tone: 'primary', type: 'submit' }
+      ],
+      onSubmit: function () {
+        var v = form.getValues();
+        var actual = U.round1(Number(v.actual) || 0);
+        var delta = U.round1(actual - current);
+        if (Math.abs(delta) < 0.05) { UI.toast('الرصيد مطابق — لا حاجة لتسوية', 'info'); return { ok: false }; }
+        var isUp = delta > 0;
+        Store.addTransaction({
+          type: isUp ? 'income' : 'expense',
+          date: v.date || U.todayISO(),
+          amount: Math.abs(delta),
+          category: isUp ? 'other_income' : 'other',
+          accountId: acc.id,
+          method: 'cash',
+          paid: true,
+          label: 'تسوية رصيد — ' + v.reason,
+          note: (v.note ? v.note + ' · ' : '') + 'من ' + U.fmtMoney(current) + ' إلى ' + U.fmtMoney(actual),
+          tags: ['تسوية']
+        });
+        UI.toast((isUp ? 'أُضيف ' : 'خُصم ') + U.fmtMoney(Math.abs(delta)) + ' كتسوية', 'success');
+        return { ok: true };
+      }
+    });
+  }
+
+  /* ======================================= تعديل الرصيد قبل اليوم (الافتتاحي) */
+  function openFundOpeningModal(ctx) {
+    var funds = F.accumulatedFunds(ctx.state);
+    var form = UI.form([
+      { name: 'opening', label: 'المبلغ الذي كان في الصندوق قبل اليوم', type: 'money', required: true, hint: 'هذا رقم افتتاحي لا تُسجَّل له حركة. القيمة الحالية: ' + U.fmtMoney(funds.opening) },
+      { name: 'note', label: 'ملاحظة', type: 'text', span: 2, placeholder: 'مثال: رصيد مرحّل من الشهر الماضي' }
+    ], { values: { opening: funds.opening, note: '' } });
+
+    UI.modal({
+      title: 'تعديل الرصيد السابق في الصندوق',
+      body: U.el('div', {}, [
+        U.el('div', { class: 'alert alert-warn' }, [
+          U.el('div', { class: 'alert-ico' }, [icon('alert', { size: 15, tone: 'warn' })]),
+          U.el('div', { class: 'alert-main' }, [
+            U.el('div', { class: 'alert-title', text: 'هذا الرقم يؤثر على «إجمالي ما عندك»' }),
+            U.el('div', { class: 'alert-body', text: 'إن أردت مطابقة الواقع تماماً استخدم «تصحيح رصيد» في بطاقة الحساب — فهو يسجّل الفرق كحركة واضحة.' })
+          ])
+        ]),
+        form.el
+      ]),
+      wide: true,
+      actions: [
+        { label: 'إلغاء', tone: 'ghost' },
+        { label: 'حفظ', tone: 'primary', type: 'submit' }
+      ],
+      onSubmit: function () {
+        var v = form.getValues();
+        var opening = U.round1(Number(v.opening) || 0);
+        var sources = (Store.state.fundSources || []).map(function (s) {
+          return s.key === 'previous_balance' ? Object.assign({}, s, { amount: opening, note: v.note || s.note }) : s;
+        });
+        if (!sources.some(function (s) { return s.key === 'previous_balance'; })) {
+          sources.unshift({ key: 'previous_balance', label: 'رصيد سابق في الصندوق', amount: opening, note: v.note || '' });
+        }
+        Store.updateFundOpening(opening, sources);
+        UI.toast('تم تحديث الرصيد السابق: ' + U.fmtMoney(opening), 'success');
+        return { ok: true };
+      }
+    });
+  }
+
   function openAccountModal(acc, ctx) {
     var form = UI.form([
       { name: 'name', label: 'اسم الحساب', type: 'text', required: true, span: 2 },
@@ -65,6 +165,16 @@
       ]),
       wide: true,
       actions: [
+        {
+          label: 'تصحيح الرصيد الفعلي',
+          tone: 'ghost',
+          close: false,
+          onClick: function () {
+            closeModalQuiet();
+            openFixBalanceModal(acc, ctx);
+            return false;
+          }
+        },
         { label: 'إلغاء', tone: 'ghost' },
         { label: 'حفظ', tone: 'primary', type: 'submit' }
       ],
@@ -73,6 +183,55 @@
         if (!v.name) { UI.toast('أدخل اسم الحساب', 'danger'); return { ok: false }; }
         Store.updateAccount(acc.id, { name: v.name, opening: Number(v.opening) || 0, kind: v.kind });
         UI.toast('تم تحديث الحساب', 'success');
+        return { ok: true };
+      }
+    });
+  }
+
+  // إغلاق النافذة الحالية بهدوء قبل فتح أخرى
+  function closeModalQuiet() {
+    var overlay = document.querySelector('.modal-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('is-open');
+    setTimeout(function () { UI.detach(overlay); }, 180);
+  }
+
+  /* ======================================= تعديل الالتزام السنوي (رسوم المدرسة) */
+  function openCommitmentModal(c, ctx) {
+    var form = UI.form([
+      { name: 'label', label: 'البيان', type: 'text', required: true, span: 2 },
+      { name: 'annual', label: 'التكلفة السنوية', type: 'money', required: true },
+      { name: 'paid', label: 'المدفوع حتى الآن', type: 'money' },
+      { name: 'note', label: 'ملاحظة', type: 'text', span: 2 }
+    ], { values: { label: c.label, annual: c.annual, paid: c.paidThisYear, note: c.note || '' } });
+
+    UI.modal({
+      title: 'تعديل: ' + c.label,
+      body: U.el('div', {}, [
+        U.el('div', { class: 'alert alert-info' }, [
+          U.el('div', { class: 'alert-ico' }, [icon('info', { size: 15 })]),
+          U.el('div', { class: 'alert-main' }, [
+            U.el('div', { class: 'alert-title', text: 'المتبقي يُحسب تلقائياً' }),
+            U.el('div', { class: 'alert-body', text: 'المتبقي = التكلفة السنوية − المدفوع. هذا بند متابعة ولا يُخصم من رصيدك.' })
+          ])
+        ]),
+        form.el
+      ]),
+      wide: true,
+      actions: [
+        { label: 'إلغاء', tone: 'ghost' },
+        { label: 'حفظ', tone: 'primary', type: 'submit' }
+      ],
+      onSubmit: function () {
+        var v = form.getValues();
+        if (!v.label) { UI.toast('أدخل البيان', 'danger'); return { ok: false }; }
+        Store.updateCommitment(c.key, {
+          label: v.label,
+          annual: U.round1(Number(v.annual) || 0),
+          paidThisYear: U.round1(Number(v.paid) || 0),
+          note: v.note || ''
+        });
+        UI.toast('تم تحديث الالتزام السنوي', 'success');
         return { ok: true };
       }
     });
@@ -224,9 +383,9 @@
     /* ================================================ 1) بطاقات الحسابات */
     var accCards = (state.accounts || []).map(function (acc) {
       var bal = F.balanceOf(state, acc.id);
-      return U.el('div', { class: 'card ' + (acc.kind === 'saving' ? 'card-primary' : 'card-income'), onClick: function () { openAccountModal(acc, ctx); }, role: 'button', tabindex: '0' }, [
+      return U.el('div', { class: 'card ' + (acc.kind === 'saving' ? 'card-primary' : 'card-income') }, [
         U.el('div', { class: 'card-head' }, [
-          icon(accountIconName(acc), { size: 20 }),
+          icon(accountIconName(acc), { size: 20, tone: 'brand' }),
           U.el('div', { class: 'card-title', text: acc.name }),
           U.el('div', { class: 'card-extra', text: kindLabel(acc.kind) })
         ]),
@@ -236,6 +395,13 @@
           U.el('div', { class: 'card-sub' }, [
             U.el('span', { text: 'نسبته من الإجمالي: ' }),
             U.el('strong', { text: total > 0 ? U.fmtPct(U.pct(Math.max(0, bal), total)) : '0%' })
+          ]),
+          U.el('div', { class: 'btn-row acc-actions' }, [
+            UI.btn('تعديل', { tone: 'ghost', size: 'sm', icon: 'edit', onClick: function () { openAccountModal(acc, ctx); } }),
+            UI.btn('تصحيح الرصيد', { tone: 'ghost', size: 'sm', icon: 'scale', onClick: function () { openFixBalanceModal(acc, ctx); } }),
+            acc.kind === 'cash'
+              ? UI.btn('حوّل للادخار', { tone: 'primary', size: 'sm', icon: 'piggy', onClick: function () { openTransferModal(state, ctx, acc.id); } })
+              : null
           ])
         ])
       ]);
@@ -275,12 +441,17 @@
         UI.stat({ icon: 'arrowUp', label: 'دخل اليوم', tone: 'income', valueClass: 'tx-income', value: U.fmtMoney(funds.todayIncome), sub: 'إيجارات محصَّلة' }),
         UI.stat({ icon: 'arrowDown', label: 'مصروف اليوم', tone: 'expense', valueClass: 'tx-expense', value: U.fmtMoney(funds.todayExpense), sub: 'خضار ومواد وخبز وقهوة' })
       ]),
-      UI.card({ title: 'من أين جاء النقد الموجود', icon: 'grid', body: U.el('div', { class: 'list' }, fundRows) }),
+      UI.card({
+        title: 'من أين جاء النقد الموجود',
+        icon: 'grid',
+        extra: UI.btn('تعديل الرصيد السابق', { tone: 'ghost', size: 'sm', icon: 'edit', onClick: function () { openFundOpeningModal(ctx); } }),
+        body: U.el('div', { class: 'list' }, fundRows)
+      }),
       U.el('div', { class: 'alert alert-info' }, [
         U.el('div', { class: 'alert-ico' }, [icon('checkCircle', { size: 14 })]),
         U.el('div', { class: 'alert-main' }, [
-          U.el('div', { class: 'alert-title', text: 'لا ديون عليك' }),
-          U.el('div', { class: 'alert-body', text: 'كل ما في الصندوق أموال مجمّعة من إيراداتك. المصروفات المخطّطة أدناه لم تُدفع بعد، ولا تُخصم من الرصيد إلا عند الدفع.' })
+          U.el('div', { class: 'alert-title', text: 'لا ديون عليك — وكل رقم قابل للتعديل' }),
+          U.el('div', { class: 'alert-body', text: 'استخدم «تصحيح الرصيد» في بطاقة الحساب لمطابقة النقد الفعلي، أو «تعديل الرصيد السابق» لتغيير المبلغ الذي كان قبل اليوم.' })
         ])
       ])
     ]));
@@ -330,7 +501,10 @@
             UI.kv('المدفوع هذا العام', U.fmtMoney(c.paidThisYear), { valueClass: 'tx-income' }),
             UI.kv('المتبقي', U.fmtMoney(c.remaining), { valueClass: 'tx-warn' }),
             UI.progress(c.pct),
-            U.el('div', { class: 'card-sub', text: 'أُنجز ' + U.fmtPct(c.pct) + ' — ' + (c.note || '') })
+            U.el('div', { class: 'card-sub', text: 'أُنجز ' + U.fmtPct(c.pct) + ' — ' + (c.note || '') }),
+            U.el('div', { class: 'btn-row' }, [
+              UI.btn('تعديل الأرقام', { tone: 'ghost', size: 'sm', icon: 'edit', onClick: function () { openCommitmentModal(c, ctx); } })
+            ])
           ])
         ]);
       });

@@ -84,6 +84,7 @@
   // تاريخ العرض: تاريخ الجهاز إن كان فيه حركة أو كان قبل البذرة، وإلا آخر يوم فيه حركة
   F.displayDay = function (state, todayISO) {
     var today = todayISO || U.todayISO();
+    if (!state) return today;
     var last = F.lastActivityDay(state);
     if (today <= last) return today;
     var hasToday = ((state && state.transactions) || []).some(function (tx) { return tx.date === today; });

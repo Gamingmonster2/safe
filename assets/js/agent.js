@@ -554,7 +554,7 @@
       out.push(s.txCount === 0 ? 'ما فيه أي حركة مسجلة في هذه الفترة.' : 'ما فيه مصروفات مدفوعة مسجلة في هذه الفترة.');
       out.push('للمقارنة، مصروف اليوم: ' + money(F.daySummary(st, today()).expense));
     } else {
-      cats.forEach(function (x) { out.push('• ' + x.icon + ' ' + x.label + ': ' + money(x.amount) + ' (' + pctText(x.pct) + ')'); });
+      cats.forEach(function (x) { out.push('• ' + x.label + ': ' + money(x.amount) + ' (' + pctText(x.pct) + ')'); });
       if (top) out.push('أكبر بند: «' + txLabel(top) + '» ' + money(top.amount) + (top.note ? ' — ' + String(top.note).slice(0, 80) : ''));
     }
     out.push('دخل الفترة ' + money(s.income) + ' — الصافي ' + money(s.net, { sign: true }) + ' — عدد الحركات ' + s.txCount);
@@ -571,7 +571,7 @@
       out.push('ما فيه دخل مسجل في هذه الفترة.');
       out.push('دخل اليوم: ' + money(F.daySummary(st, today()).income) + ' — ورصيدك الحالي ' + money(F.totalBalance(st)));
     } else {
-      src.forEach(function (x) { out.push('• ' + x.icon + ' ' + x.label + ': ' + money(x.amount) + ' (' + pctText(x.pct) + ') — ' + x.count + ' حركة'); });
+      src.forEach(function (x) { out.push('• ' + x.label + ': ' + money(x.amount) + ' (' + pctText(x.pct) + ') — ' + x.count + ' حركة'); });
       if (byLoc.length) out.push('• حسب المكان: ' + byLoc.map(function (l) { return l.label + ' ' + money(l.amount); }).join('، '));
     }
     out.push('مصروف الفترة ' + money(s.expense) + ' — الصافي ' + money(s.net, { sign: true }));
@@ -584,7 +584,7 @@
     var d = F.daySummary(st, today());
     var ob = F.obligations(st), rec = F.receivables(st, today());
     var out = ['💵 رصيدك الآن: ' + money(total)];
-    (st.accounts || []).forEach(function (acc) { out.push('• ' + (acc.icon || '•') + ' ' + acc.name + ': ' + money(b[acc.id])); });
+    (st.accounts || []).forEach(function (acc) { out.push('• ' + acc.name + ': ' + money(b[acc.id])); });
     out.push('• اليوم: دخل ' + money(d.income) + ' — مصروف ' + money(d.expense) + ' — الصافي ' + money(d.net, { sign: true }));
     out.push('• مستحق لي (غير محصَّل): ' + money(rec.total) + ' — ولا ديون عليك ✅');
     if (c.q.indexOf('يكفي') >= 0 || c.q.indexOf('اكفي') >= 0) {
@@ -693,7 +693,7 @@
     if (!keyed) out.push('ℹ️ التحليل الذكي (DeepSeek) يحتاج مفتاح API من الإعدادات — وهذا تحليل محلي من أرقامك الفعلية:');
     out.push('📊 وضعك في ' + U.monthLabel(key) + ': دخل ' + money(ms.income) + ' — مصروف ' + money(ms.expense) +
       ' — صافي ' + money(ms.net, { sign: true }) + ' (نسبة ادخار ' + pctText(ms.savingRate) + ')');
-    if (cats.length) out.push('• أعلى بند: ' + cats[0].icon + ' ' + cats[0].label + ' ' + money(cats[0].amount) + ' (' + pctText(cats[0].pct) + ') — أول شي تراقبه.');
+    if (cats.length) out.push('• أعلى بند: ' + cats[0].label + ' ' + money(cats[0].amount) + ' (' + pctText(cats[0].pct) + ') — أول شي تراقبه.');
     if (ms.avgDailyExpense > 0) out.push('• معدل صرفك اليومي ' + money(ms.avgDailyExpense) + ' ≈ ' + money(U.round(ms.avgDailyExpense * 30, 2)) + ' بالشهر.');
     if (rec.total > 0) {
       out.push('• عندك ' + money(rec.total) + ' مستحق غير محصَّل' +
@@ -1119,7 +1119,7 @@
     if (alerts.length) {
       p.push('');
       p.push('تنبيهات حالية:');
-      alerts.forEach(function (a) { p.push('• ' + (a.icon || '') + ' ' + a.title + ' — ' + String(a.body || '').slice(0, 160)); });
+      alerts.forEach(function (a) { p.push('• ' + a.title + ' — ' + String(a.body || '').slice(0, 160)); });
     }
     p.push('');
     p.push('قواعد إلزامية:');

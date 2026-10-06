@@ -242,24 +242,79 @@
 
   /* ============================================================== التحميل */
 
+  /* هل يوجد نظام حماية (خزنة مشفّرة)؟ إن لم يوجد نعمل بالوضع القديم غير المشفّر
+     حتى يُنشئ المستخدم حسابه، ثم تُنقل البيانات وتُحذف النسخة النصية. */
+  function vault() { return Fin.Vault || null; }
+  function vaultActive() {
+    var V = vault();
+    return !!(V && typeof V.isConfigured === 'function' && V.isConfigured());
+  }
+
+  // يقرأ النسخة القديمة غير المشفّرة (للترحيل فقط)
+  function readLegacy() {
+    if (!hasLS()) return null;
+    try {
+      var raw = localStorage.getItem(KEY);
+      return raw ? S.migrate(JSON.parse(raw)) : null;
+    } catch (e) {
+      console.error('[store] تلف في البيانات المحفوظة القديمة', e);
+      return null;
+    }
+  }
+
+  function dropLegacy() {
+    if (!hasLS()) return;
+    try { localStorage.removeItem(KEY); } catch (e) { /* تجاهل */ }
+  }
+
+  S.vaultActive = vaultActive;
+
+  // تحميل متزامن (الوضع القديم أو بعد أن تُعيد البوابة الحالة المفكوكة)
   S.load = function (force) {
     if (state && !force) return state;
-    var raw = null;
-    if (hasLS()) { try { raw = localStorage.getItem(KEY); } catch (e) { raw = null; } }
-    if (raw) {
-      try {
-        var parsed = JSON.parse(raw);
-        state = S.migrate(parsed);
-        S.ensureStatuses(state);
-        return state;
-      } catch (e) {
-        console.error('[store] تلف في البيانات المحفوظة — سيتم استخدام البذرة', e);
-      }
+
+    // خزنة مشفّرة موجودة ولم تُفتح بعد: لا نُحمّل شيئاً — البوابة تتولّى الأمر
+    if (vaultActive() && !(vault().isUnlocked && vault().isUnlocked())) return null;
+
+    var legacy = readLegacy();
+    if (legacy) {
+      state = legacy;
+      S.ensureStatuses(state);
+      return state;
     }
     state = S.seed();
     S.ensureStatuses(state);
     S.save(true);
     return state;
+  };
+
+  /* ترطيب الحالة من الخزنة بعد الدخول (تُنادى من البوابة في app.js) */
+  S.hydrate = function (data) {
+    state = data ? S.migrate(data) : S.seed();
+    S.ensureStatuses(state);
+    notify('hydrate', {});
+    return state;
+  };
+
+  // إنشاء الخزنة أول مرة: نأخذ الحالة الحالية (البذرة أو النسخة القديمة) ونشفّرها
+  S.snapshotForVault = function () {
+    var current = state || readLegacy();
+    var data = current ? S.migrate(U.deepClone(current)) : S.seed();
+    return data;
+  };
+
+  // بعد أول تشفير ناجح: نحذف النسخة النصية القديمة
+  S.confirmVaultMigration = function () {
+    dropLegacy();
+    try { localStorage.removeItem(KEY + '.savedAt'); } catch (e) { /* تجاهل */ }
+    notify('vault-migrated', {});
+    return true;
+  };
+
+  // هل توجد بيانات قديمة غير مشفّرة تنتظر النقل؟
+  S.hasLegacyData = function () {
+    if (!hasLS()) return false;
+    try { return !!localStorage.getItem(KEY); } catch (e) { return false; }
   };
 
   S.migrate = function (data) {
@@ -297,8 +352,24 @@
   S.save = function (immediate) {
     if (!state) return;
     if (muted && !immediate) return;
+
     var doSave = function () {
       if (!hasLS()) return;
+      // الخزنة المشفّرة: كل كتابة تمرّ عبرها
+      if (vaultActive()) {
+        var V = vault();
+        if (!V.isUnlocked()) return; // مقفلة: لا نكتب شيئاً إطلاقاً
+        Promise.resolve(V.save(state)).then(function (res) {
+          if (res && res.ok === false) notify('save-error', { error: res.error || 'فشل الحفظ المشفّر' });
+          else {
+            try { localStorage.setItem(KEY + '.savedAt', new Date().toISOString()); } catch (e) { /* تجاهل */ }
+          }
+        }, function (err) {
+          notify('save-error', { error: String(err && err.message || err) });
+        });
+        return;
+      }
+      // الوضع القديم غير المشفّر
       try {
         localStorage.setItem(KEY, JSON.stringify(state));
         localStorage.setItem(KEY + '.savedAt', new Date().toISOString());
@@ -307,8 +378,9 @@
         notify('save-error', { error: String(e && e.message || e) });
       }
     };
+
     if (immediate) doSave();
-    else if (!S._saveDebounced) { S._saveDebounced = U.debounce(doSave, 300); S._saveDebounced(); }
+    else if (!S._saveDebounced) { S._saveDebounced = U.debounce(doSave, 400); S._saveDebounced(); }
     else S._saveDebounced();
   };
 
@@ -644,6 +716,28 @@
     S.save(true);
     notify('clear-all');
     return state;
+  };
+
+  /* الرصيد السابق في الصندوق (الأموال المجمّعة قبل حركات اليوم) */
+  S.updateFundOpening = function (opening, sources) {
+    if (!state) return null;
+    state.fundOpening = U.round1(Number(opening) || 0);
+    if (Array.isArray(sources)) state.fundSources = sources;
+    touch('fund-opening', { opening: state.fundOpening });
+    return state.fundOpening;
+  };
+
+  /* الالتزامات السنوية (خطط مثل رسوم المدرسة) — قابلة للتعديل */
+  S.updateCommitment = function (key, patch) {
+    if (!state || !Array.isArray(state.commitments)) return null;
+    var idx = -1;
+    state.commitments.forEach(function (c, i) { if (c.key === key) idx = i; });
+    if (idx < 0) return null;
+    state.commitments[idx] = Object.assign({}, state.commitments[idx], patch || {}, { key: key });
+    var c = state.commitments[idx];
+    c.remaining = U.round1(Math.max(0, (Number(c.annual) || 0) - (Number(c.paidThisYear) || 0)));
+    touch('commitment', { commitment: c });
+    return c;
   };
 
   S.stats = function () {

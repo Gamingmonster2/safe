@@ -330,7 +330,7 @@ if (manifest) {
 
   const shorts = Array.isArray(manifest.shortcuts) ? manifest.shortcuts : [];
   check(shorts.length >= 3, 'عدد الـ shortcuts = ' + shorts.length);
-  for (const want of ['#/expenses', '#/income', '#/agent']) {
+  for (const want of ['#/expenses', '#/income', '#/agent', '#/domains']) {
     check(shorts.some((s) => String(s.url || '').includes(want)), 'اختصار يشير إلى ' + want);
   }
 }

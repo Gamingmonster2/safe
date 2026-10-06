@@ -10,6 +10,12 @@
   var C = Fin.C, U = Fin.U, UI = Fin.UI, Store = Fin.Store, F = Fin.Finance;
   Fin.Views = Fin.Views || {};
 
+  /* حالة الشاشة: اليوم المعروض + إظهار الأيام السابقة.
+     القاعدة: يوم واحد فقط يُعرض (الافتراضي اليوم)، والأيام السابقة تُطلب بضغطة. */
+  var dashDay = null;
+  var dashHistory = false;
+  try { dashDay = sessionStorage.getItem('masrofi.dashDay') || null; } catch (e) { dashDay = null; }
+
   /* أيقونة SVG احترافية من icons.js (بديل الإيموجي) */
   function icon(name, opts) {
     opts = opts || {};
@@ -43,9 +49,10 @@
 
   /* --------------------------------------------------- إضافة سريعة بضغطة */
 
-  function quickAdd(categoryKey) {
+  function quickAdd(categoryKey, dayISO) {
     var cat = C.catExpense(categoryKey);
     var suggested = cat.quick || '';
+    var defaultDay = dayISO || U.todayISO();
     var form = null;
 
     UI.modal({
@@ -54,10 +61,10 @@
       onMount: function (card) {
         form = UI.form([
           { name: 'amount', label: 'المبلغ', type: 'money', required: true, hint: suggested ? 'المقترح: ' + U.fmtMoney(suggested) + ' — عدّله إن اختلف' : '' },
-          { name: 'date', label: 'التاريخ', type: 'date', value: U.todayISO(), required: true },
+          { name: 'date', label: 'التاريخ', type: 'date', value: defaultDay, required: true },
           { name: 'note', label: 'ملاحظة', type: 'text', placeholder: 'اختياري (مثال: من مخبز الحاج)' },
-          { name: 'unpaid', label: 'على الحساب (لم أسدّد)', type: 'checkbox' }
-        ], { values: { amount: suggested, date: U.todayISO() } });
+          { name: 'unpaid', label: 'لم أدفعه بعد (مخطّط)', type: 'checkbox' }
+        ], { values: { amount: suggested, date: defaultDay } });
         card.querySelector('.modal-body').appendChild(form.el);
       },
       actions: [
@@ -119,7 +126,7 @@
     ]);
   }
 
-  function quickGrid() {
+  function quickGrid(dayISO) {
     var grid = U.el('div', { class: 'quick-grid' });
     C.QUICK_ADD.forEach(function (key) {
       var cat = C.catExpense(key);
@@ -127,7 +134,7 @@
         type: 'button',
         class: 'quick-btn',
         title: 'إضافة ' + cat.label + (cat.quick ? ' — المقترح ' + U.fmtMoney(cat.quick) : ''),
-        onClick: function () { quickAdd(key); }
+        onClick: function () { quickAdd(key, dayISO); }
       }, [
         U.el('span', { class: 'quick-ico' }, [icon(cat.icon, { size: 22, tone: 'out', fallback: 'package' })]),
         U.el('span', { class: 'quick-label', text: cat.label }),
@@ -332,6 +339,92 @@
     ]);
   }
 
+  /* ------------------------------------------- منتقي اليوم (اليوم فقط افتراضياً) */
+
+  // اليوم المعروض: من التخزين المحلي للجلسة إن اختار المستخدم يوماً آخر
+  function pickedDay(ctx) {
+    if (dashDay) return dashDay;
+    return (ctx && (ctx.asOf || ctx.today)) || U.todayISO();
+  }
+
+  function setDay(iso) {
+    dashDay = iso;
+    try { sessionStorage.setItem('masrofi.dashDay', iso); } catch (e) { /* تجاهل */ }
+    if (Fin.App) Fin.App.refresh();
+  }
+
+  function dayNavigator(state, asOf, today) {
+    var days = activityDays(state, 30);
+    var isToday = asOf === today;
+    var row = U.el('div', { class: 'day-nav' });
+
+    row.appendChild(UI.iconBtn('chevronRight', 'اليوم السابق', function () { setDay(U.addDays(asOf, -1)); }));
+    row.appendChild(U.el('input', {
+      type: 'date', class: 'input day-picker', value: asOf,
+      max: today,
+      onChange: function (e) { if (e.target.value) setDay(e.target.value); }
+    }));
+    row.appendChild(UI.iconBtn('chevronLeft', 'اليوم التالي', function () {
+      var next = U.addDays(asOf, 1);
+      setDay(next > today ? today : next);
+    }));
+    if (!isToday) {
+      row.appendChild(UI.btn('اليوم', { tone: 'primary', size: 'sm', onClick: function () { setDay(today); } }));
+    } else {
+      row.appendChild(UI.badge('أنت في اليوم الحالي', 'income'));
+    }
+    if (days.length) {
+      row.appendChild(UI.chip('أيام فيها حركات (' + days.length + ')', {
+        icon: 'list',
+        active: dashHistory,
+        onClick: function () { dashHistory = !dashHistory; if (Fin.App) Fin.App.refresh(); }
+      }));
+    }
+    return U.el('div', { class: 'day-nav-wrap' }, [
+      row,
+      U.el('div', { class: 'muted day-nav-hint', text: isToday
+        ? 'تعرض حركات اليوم فقط. اختر تاريخاً لعرض يوم آخر، أو اضغط «أيام فيها حركات».'
+        : 'تعرض حركات ' + U.dateLabel(asOf) + ' — اضغط «اليوم» للعودة.' })
+    ]);
+  }
+
+  // الأيام التي فيها حركات فعلية (الأحدث أولاً) — للاختيار السريع
+  function activityDays(state, limit) {
+    var seen = {};
+    ((state && state.transactions) || []).forEach(function (tx) {
+      if (tx && tx.date) seen[tx.date] = (seen[tx.date] || 0) + 1;
+    });
+    return Object.keys(seen).sort(function (a, b) { return a < b ? 1 : -1; }).slice(0, limit || 30)
+      .map(function (d) { return { date: d, count: seen[d] }; });
+  }
+
+  function historySection(state, asOf, today) {
+    var days = activityDays(state, 30);
+    if (!days.length) return null;
+    var rows = days.map(function (d) {
+      var s = F.daySummary(state, d.date);
+      var isCurrent = d.date === asOf;
+      return U.el('div', {
+        class: 'day-row' + (isCurrent ? ' is-current' : ''),
+        onClick: function () { setDay(d.date); }
+      }, [
+        U.el('div', { class: 'day-row-main' }, [
+          U.el('div', { class: 'day-row-title', text: U.dateLabel(d.date, 'weekday') }),
+          U.el('div', { class: 'day-row-meta', text: d.count + ' حركة · ' + U.relativeDay(d.date, today) })
+        ]),
+        U.el('div', { class: 'day-row-nums' }, [
+          s.income ? U.el('span', { class: 'amount-in', text: '+' + U.fmtMoney(s.income, { currency: false }) }) : null,
+          s.expense ? U.el('span', { class: 'amount-out', text: '−' + U.fmtMoney(s.expense, { currency: false }) }) : null
+        ]),
+        U.el('span', { class: 'badge badge-' + (s.net >= 0 ? 'income' : 'expense'), text: U.fmtMoney(s.net, { sign: true }) })
+      ]);
+    });
+    return UI.section('أيام سابقة (اختر يوماً لعرضه)', [
+      U.el('div', { class: 'card' }, [U.el('div', { class: 'card-body' }, rows)]),
+      UI.btn('عرض كل التقارير', { tone: 'ghost', size: 'sm', onClick: function () { go('reports'); } })
+    ]);
+  }
+
   /* --------------------------------------------------------------- الشاشة */
 
   Fin.Views.dashboard = {
@@ -339,32 +432,60 @@
     title: 'لوحة اليوم',
     icon: 'home',
     order: 1,
-    subtitle: 'كل شيء في مكان واحد',
+    subtitle: 'اليوم فقط — واختر أي يوم لعرضه',
 
     render: function (rootEl, ctx) {
       var state = Store.state;
       var today = ctx.today || U.todayISO();
-      // يوم العرض = آخر يوم فيه حركة (وإلا نعرض أصفاراً مربكة إن فُتح التطبيق في يوم بلا حركات)
-      var asOf = ctx.asOf || F.displayDay(state, today);
+      // القاعدة: نعرض يوماً واحداً فقط (الافتراضي اليوم). لا تختلط الأيام.
+      var asOf = pickedDay(ctx);
+      if (asOf > today) asOf = today;
       var d = F.daySummary(state, asOf);
       var rec = F.receivables(state, today);
 
+      rootEl.appendChild(dayNavigator(state, asOf, today));
       rootEl.appendChild(dayHero(d));
 
-      if (asOf !== today) {
+      var hasAny = d.txCount > 0 || d.planned > 0;
+      if (!hasAny) {
         rootEl.appendChild(U.el('div', { class: 'alert alert-info' }, [
           U.el('div', { class: 'alert-ico' }, [icon('calendar', { size: 14 })]),
           U.el('div', { class: 'alert-main' }, [
-            U.el('div', { class: 'alert-title', text: 'تعرض آخر يوم فيه حركات: ' + U.dateLabel(asOf) }),
-            U.el('div', { class: 'alert-body', text: 'اليوم (' + U.dateLabel(today, 'short') + ') لم تُسجّل فيه أي حركة بعد. أضف مصروفاً من الأعلى وسيتحوّل العرض إليه تلقائياً.' })
+            U.el('div', { class: 'alert-title', text: 'لا حركات في ' + U.dateLabel(asOf) }),
+            U.el('div', { class: 'alert-body', text: asOf === today
+              ? 'أضف مصروفاً من الأعلى (بضغطة واحدة) وسيظهر هنا فوراً.'
+              : 'اختر يوماً آخر من الأعلى، أو أضف حركة بتاريخ هذا اليوم.' })
           ])
         ]));
       }
 
       rootEl.appendChild(UI.section('إضافة بضغطة واحدة', [
-        quickGrid(),
+        quickGrid(asOf),
         U.el('div', { class: 'muted center', text: 'اضغط الفئة ثم «إضافة» — المبلغ مقترح وتقدر تعدّله' })
       ]));
+
+      // حركات اليوم المعروض فقط (لا تختلط بأيام أخرى)
+      var dayTx = F.txInRange(state, asOf, asOf, { includePlanned: false });
+      rootEl.appendChild(UI.section('حركات ' + (asOf === today ? 'اليوم' : U.dateLabel(asOf, 'short')), [
+        UI.list(dayTx, {
+          emptyIcon: 'receipt',
+          emptyTitle: 'لا حركات مسجّلة',
+          emptyBody: 'أضف مصروفاً أو سجّل تحصيلاً من الأعلى',
+          render: function (tx) {
+            return UI.txRow(tx, {
+              onEdit: function (t) { editTx(t); },
+              onDelete: function (t) { deleteTx(t); }
+            });
+          }
+        }),
+        d.planned > 0 ? U.el('div', { class: 'muted', text: 'ملاحظة: ' + U.fmtMoney(d.planned) + ' مصروفات مخطّطة لم تُدفع (لا تُخصم من الرصيد).' }) : null
+      ]));
+
+      // أيام سابقة: مطويّة حتى يطلبها المستخدم
+      if (dashHistory) {
+        var hist = historySection(state, asOf, today);
+        if (hist) rootEl.appendChild(hist);
+      }
 
       rootEl.appendChild(receivingSection(rec));
 
